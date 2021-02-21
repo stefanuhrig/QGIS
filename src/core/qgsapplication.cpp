@@ -347,6 +347,13 @@ void QgsApplication::init( QString profileFolder )
   }
   *sSystemEnvVars() = systemEnvVarMap;
 
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,2,0)
+  if ( CPLGetConfigOption( "GDAL_NUM_THREADS", nullptr ) == nullptr )
+  {
+    CPLSetConfigOption( "GDAL_NUM_THREADS", "ALL_CPUS" );
+  }
+#endif
+
 #if PROJ_VERSION_MAJOR>=6
   // append local user-writable folder as a proj search path
   QStringList currentProjSearchPaths = QgsProjUtils::searchPaths();
@@ -1411,7 +1418,7 @@ QString QgsApplication::reportStyleSheet( QgsApplication::StyleSheetType styleSh
                             "body{"
                             "  background: white;"
                             "  color: black;"
-                            "  font-family: 'Lato', 'Ubuntu', 'Lucida Grande', 'Segoe UI', 'Arial', sans-serif;"
+                            "  font-family: 'Lato', 'Open Sans', 'Lucida Grande', 'Segoe UI', 'Arial', sans-serif;"
                             "  width: 100%;"
                             "}"
                             "h1{  background-color: #F6F6F6;"

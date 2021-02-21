@@ -230,14 +230,16 @@ QgsHanaLayerItem::QgsHanaLayerItem(
   : QgsLayerItem( parent, name, path, QString(), layerType, QStringLiteral( "hana" ) )
   , mLayerProperty( layerProperty )
 {
-  mCapabilities |= Delete;
+  mCapabilities |= Delete | Fertile;
   mUri = createUri();
-  setState( Populated );
+  setState( NotPopulated );
 }
 
-QString QgsHanaLayerItem::comments() const
+QVector<QgsDataItem *> QgsHanaLayerItem::createChildren()
 {
-  return mLayerProperty.tableComment;
+  QVector<QgsDataItem *> items;
+  items.push_back( new QgsFieldsItem( this, uri() + QStringLiteral( "/columns/ " ), createUri(), providerKey(), mLayerProperty.schemaName, mLayerProperty.tableName ) );
+  return items;
 }
 
 QString QgsHanaLayerItem::createUri() const
@@ -260,7 +262,7 @@ QString QgsHanaLayerItem::createUri() const
     if ( !pkColumnsStored.empty() )
     {
       // We check whether the primary key columns still exist.
-      auto intersection = pkColumnsStored.toSet().intersect( mLayerProperty.pkCols.toSet() );
+      auto intersection = qgis::listToSet( pkColumnsStored ).intersect( qgis::listToSet( mLayerProperty.pkCols ) );
       if ( intersection.size() == pkColumnsStored.size() )
       {
         for ( const auto &column : pkColumnsStored )
@@ -277,6 +279,11 @@ QString QgsHanaLayerItem::createUri() const
     uri.setSrid( QString::number( mLayerProperty.srid ) );
   QgsDebugMsgLevel( QStringLiteral( "layer uri: %1" ).arg( uri.uri( false ) ), 4 );
   return uri.uri( false );
+}
+
+QString QgsHanaLayerItem::comments() const
+{
+  return mLayerProperty.tableComment;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,13 +310,22 @@ QVector<QgsDataItem *> QgsHanaSchemaItem::createChildren()
     return items;
   }
 
-  QgsHanaSettings settings( mConnectionName, true );
-  const QVector<QgsHanaLayerProperty> layers = conn->getLayersFull( mSchemaName,
-      settings.allowGeometrylessTables(), settings.userTablesOnly() );
+  try
+  {
+    QgsHanaSettings settings( mConnectionName, true );
+    const QVector<QgsHanaLayerProperty> layers = conn->getLayersFull( mSchemaName,
+        settings.allowGeometrylessTables(), settings.userTablesOnly() );
 
-  items.reserve( layers.size() );
-  for ( const QgsHanaLayerProperty &layerInfo : layers )
-    items.append( createLayer( layerInfo ) );
+    items.reserve( layers.size() );
+    for ( const QgsHanaLayerProperty &layerInfo : layers )
+      items.append( createLayer( layerInfo ) );
+  }
+  catch ( const QgsHanaException &ex )
+  {
+    QgsErrorItem *itemError = new QgsErrorItem( this, tr( "Server error occurred" ), mPath + "/error" );
+    itemError->setToolTip( ex.what() );
+    items.append( itemError );
+  }
 
   setName( mSchemaName );
 

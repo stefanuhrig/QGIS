@@ -45,6 +45,8 @@ class QgsGeometryPartIterator;
 class QgsGeometryConstPartIterator;
 class QgsConstWkbPtr;
 class QPainterPath;
+class QgsAbstractGeometryTransformer;
+class QgsFeedback;
 
 typedef QVector< QgsPoint > QgsPointSequence;
 #ifndef SIP_RUN
@@ -689,6 +691,21 @@ class CORE_EXPORT QgsAbstractGeometry
      */
     virtual bool isValid( QString &error SIP_OUT, int flags = 0 ) const = 0;
 
+    /**
+     * Transforms the vertices from the geometry in place, using the specified geometry \a transformer
+     * object.
+     *
+     * Depending on the \a transformer used, this may result in an invalid geometry.
+     *
+     * The optional \a feedback argument can be used to cancel the transformation before it completes.
+     * If this is done, the geometry will be left in a semi-transformed state.
+     *
+     * \returns TRUE if the geometry was successfully transformed.
+     *
+     * \since QGIS 3.18
+     */
+    virtual bool transform( QgsAbstractGeometryTransformer *transformer, QgsFeedback *feedback = nullptr ) = 0;
+
 #ifndef SIP_RUN
 
     /**
@@ -720,7 +737,7 @@ class CORE_EXPORT QgsAbstractGeometry
 
     /**
      * \ingroup core
-     * The part_iterator class provides STL-style iterator for geometry parts.
+     * \brief The part_iterator class provides STL-style iterator for geometry parts.
      * \since QGIS 3.6
      */
     class CORE_EXPORT part_iterator
@@ -790,7 +807,7 @@ class CORE_EXPORT QgsAbstractGeometry
 
     /**
      * \ingroup core
-     * The part_iterator class provides STL-style iterator for const references to geometry parts.
+     * \brief The part_iterator class provides STL-style iterator for const references to geometry parts.
      * \since QGIS 3.6
      */
     class CORE_EXPORT const_part_iterator
@@ -850,7 +867,7 @@ class CORE_EXPORT QgsAbstractGeometry
 
     /**
      * \ingroup core
-     * The vertex_iterator class provides STL-style iterator for vertices.
+     * \brief The vertex_iterator class provides STL-style iterator for vertices.
      * \since QGIS 3.0
      */
     class CORE_EXPORT vertex_iterator

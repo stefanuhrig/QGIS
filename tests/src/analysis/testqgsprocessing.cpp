@@ -989,6 +989,9 @@ void TestQgsProcessing::context()
   QCOMPARE( context.distanceUnit(), QgsUnitTypes::DistanceFeet );
   QCOMPARE( context.areaUnit(), QgsUnitTypes::AreaHectares );
 
+  context.setLogLevel( QgsProcessingContext::Verbose );
+  QCOMPARE( static_cast< int >( context.logLevel() ), static_cast< int >( QgsProcessingContext::Verbose ) );
+
   context.setInvalidGeometryCheck( QgsFeatureRequest::GeometrySkipInvalid );
   QCOMPARE( context.invalidGeometryCheck(), QgsFeatureRequest::GeometrySkipInvalid );
 
@@ -1002,6 +1005,7 @@ void TestQgsProcessing::context()
   QCOMPARE( context2.invalidGeometryCheck(), context.invalidGeometryCheck() );
   QCOMPARE( context2.flags(), context.flags() );
   QCOMPARE( context2.project(), context.project() );
+  QCOMPARE( static_cast< int >( context2.logLevel() ), static_cast< int >( QgsProcessingContext::Verbose ) );
   // layers from temporaryLayerStore must not be copied by copyThreadSafeSettings
   QVERIFY( context2.temporaryLayerStore()->mapLayers().isEmpty() );
 
@@ -2020,6 +2024,21 @@ void TestQgsProcessing::createFeatureSink()
   QCOMPARE( layer->featureCount(), 2L );
   QVERIFY( layer->getFeatures().nextFeature( f ) );
   QCOMPARE( f.attribute( "my_field" ).toString(), QStringLiteral( "val2" ) );
+
+  // save to database
+  destination = "postgres://dbname='qgis_test' service='qgis_test' table=\"public\".\"test_feature_sink\" (geom)";
+  sink.reset( QgsProcessingUtils::createFeatureSink( destination, context, fields, QgsWkbTypes::Polygon, QgsCoordinateReferenceSystem::fromEpsgId( 3111 ) ) );
+  QVERIFY( sink.get() );
+  f = QgsFeature( fields );
+  f.setGeometry( QgsGeometry::fromWkt( QStringLiteral( "Polygon((0 0, 0 1, 1 1, 1 0, 0 0 ))" ) ) );
+  f.setAttributes( QgsAttributes() << "val" );
+  QVERIFY( sink->addFeature( f ) );
+  sink.reset( nullptr );
+  layer = qobject_cast< QgsVectorLayer *>( QgsProcessingUtils::mapLayerFromString( destination, context, true ) );
+  QVERIFY( layer && layer->isValid() );
+  QCOMPARE( layer->wkbType(), QgsWkbTypes::Polygon );
+  QVERIFY( layer->getFeatures().nextFeature( f ) );
+  QCOMPARE( f.attribute( "my_field" ).toString(), QStringLiteral( "val" ) );
 }
 
 void TestQgsProcessing::source()
@@ -9412,9 +9431,6 @@ void TestQgsProcessing::modelerAlgorithm()
   lastParams.insert( QStringLiteral( "a" ), 2 );
   lastParams.insert( QStringLiteral( "b" ), 4 );
   alg.setDesignerParameterValues( lastParams );
-
-  // we expect the result to add in some custom parameters -- namely the verbose log switch
-  lastParams.insert( QStringLiteral( "VERBOSE_LOG" ), true );
   QCOMPARE( alg.designerParameterValues(), lastParams );
 
   // child algorithms

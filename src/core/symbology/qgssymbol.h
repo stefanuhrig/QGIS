@@ -59,7 +59,7 @@ typedef QList<QgsSymbolLayer *> QgsSymbolLayerList;
  * \ingroup core
  * \class QgsSymbol
  *
- * Abstract base class for all rendered symbols.
+ * \brief Abstract base class for all rendered symbols.
  */
 class CORE_EXPORT QgsSymbol
 {
@@ -589,6 +589,17 @@ class CORE_EXPORT QgsSymbol
     bool hasDataDefinedProperties() const;
 
     /**
+     * Returns TRUE if the symbol rendering can cause visible artifacts across a single feature
+     * when the feature is rendered as a series of adjacent map tiles each containing a portion of the feature's geometry.
+     *
+     * Internally this calls QgsSymbolLayer::canCauseArtifactsBetweenAdjacentTiles() for all symbol layers in the symbol
+     * and returns TRUE if any of the layers returned TRUE.
+     *
+     * \since QGIS 3.18
+     */
+    bool canCauseArtifactsBetweenAdjacentTiles() const;
+
+    /**
      * \note the layer will be NULLPTR after stopRender
      * \deprecated Will be removed in QGIS 4.0
      */
@@ -987,7 +998,7 @@ class CORE_EXPORT QgsSymbolRenderContext
  * \ingroup core
  * \class QgsMarkerSymbol
  *
- * A marker symbol type, for rendering Point and MultiPoint geometries.
+ * \brief A marker symbol type, for rendering Point and MultiPoint geometries.
  */
 class CORE_EXPORT QgsMarkerSymbol : public QgsSymbol
 {
@@ -1187,7 +1198,7 @@ class CORE_EXPORT QgsMarkerSymbol : public QgsSymbol
  * \ingroup core
  * \class QgsLineSymbol
  *
- * A line symbol type, for rendering LineString and MultiLineString geometries.
+ * \brief A line symbol type, for rendering LineString and MultiLineString geometries.
  */
 class CORE_EXPORT QgsLineSymbol : public QgsSymbol
 {
@@ -1290,7 +1301,7 @@ class CORE_EXPORT QgsLineSymbol : public QgsSymbol
  * \ingroup core
  * \class QgsFillSymbol
  *
- * A fill symbol type, for rendering Polygon and MultiPolygon geometries.
+ * \brief A fill symbol type, for rendering Polygon and MultiPolygon geometries.
  */
 class CORE_EXPORT QgsFillSymbol : public QgsSymbol
 {

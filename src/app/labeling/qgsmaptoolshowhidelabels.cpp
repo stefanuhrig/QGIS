@@ -28,8 +28,8 @@
 #include "qgslogger.h"
 
 
-QgsMapToolShowHideLabels::QgsMapToolShowHideLabels( QgsMapCanvas *canvas )
-  : QgsMapToolLabel( canvas )
+QgsMapToolShowHideLabels::QgsMapToolShowHideLabels( QgsMapCanvas *canvas, QgsAdvancedDigitizingDockWidget *cadDock )
+  : QgsMapToolLabel( canvas, cadDock )
   , mDragging( false )
 {
   mToolName = tr( "Show/hide labels" );
@@ -47,6 +47,8 @@ QgsMapToolShowHideLabels::~QgsMapToolShowHideLabels()
 void QgsMapToolShowHideLabels::canvasPressEvent( QgsMapMouseEvent *e )
 {
   Q_UNUSED( e )
+
+  clearHoveredLabel();
 
   QgsMapLayer *layer = mCanvas->currentLayer();
   QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( layer );
@@ -74,8 +76,13 @@ void QgsMapToolShowHideLabels::canvasPressEvent( QgsMapMouseEvent *e )
 void QgsMapToolShowHideLabels::canvasMoveEvent( QgsMapMouseEvent *e )
 {
   if ( e->buttons() != Qt::LeftButton )
+  {
+    if ( !mDragging )
+      updateHoveredLabel( e );
     return;
+  }
 
+  clearHoveredLabel();
   if ( !mDragging )
   {
     mDragging = true;

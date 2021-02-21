@@ -260,8 +260,7 @@ void QgsAbstractRelationEditorWidget::addFeature( const QgsGeometry &geometry )
       keyAttrs.insert( fields.indexFromName( fieldPair.referencingField() ), mFeature.attribute( fieldPair.referencedField() ) );
     }
 
-    bool result = vlTools->addFeature( mRelation.referencingLayer(), keyAttrs, geometry );
-    Q_ASSERT( result );
+    vlTools->addFeature( mRelation.referencingLayer(), keyAttrs, geometry );
   }
 }
 
@@ -477,7 +476,7 @@ void QgsAbstractRelationEditorWidget::onLinkFeatureDlgAccepted()
     for ( QgsFeatureId fid : constSelectedFeatures )
     {
       QgsVectorLayer *referencingLayer = mRelation.referencingLayer();
-      if ( mRelation.type() == QgsRelation::Normal )
+      if ( mRelation.type() == QgsRelation::Generated )
       {
         QgsPolymorphicRelation polyRel = mRelation.polymorphicRelation();
 

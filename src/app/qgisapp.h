@@ -554,7 +554,6 @@ class APP_EXPORT QgisApp : public QMainWindow, private Ui::MainWindow
     QAction *actionAddWcsLayer() { return mActionAddWcsLayer; }
     QAction *actionAddWfsLayer() { return mActionAddWfsLayer; }
     QAction *actionAddAfsLayer() { return mActionAddAfsLayer; }
-    QAction *actionAddAmsLayer() { return mActionAddAmsLayer; }
     QAction *actionCopyLayerStyle() { return mActionCopyStyle; }
     QAction *actionPasteLayerStyle() { return mActionPasteStyle; }
     QAction *actionOpenTable() { return mActionOpenTable; }
@@ -1726,6 +1725,15 @@ class APP_EXPORT QgisApp : public QMainWindow, private Ui::MainWindow
 
     //! Update the label toolbar buttons
     void updateLabelToolButtons();
+
+    //! Returns true if at least one selected layer in layer panel has a selection (returns false if none).
+    bool selectedLayersHaveSelection();
+
+    //! Returns true if at least one selected layer in layer panel is spatial (returns false if none).
+    bool selectedLayersHaveSpatial();
+
+    //! Activates or deactivates actions depending on the selected layers in the layer panel.
+    void activateDeactivateMultipleLayersRelatedActions();
 
     /**
      * Activates or deactivates actions depending on the current maplayer type.

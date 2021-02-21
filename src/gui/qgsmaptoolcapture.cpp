@@ -71,6 +71,14 @@ QgsMapToolCapture::QgsMapToolCapture( QgsMapCanvas *canvas, QgsAdvancedDigitizin
 
 QgsMapToolCapture::~QgsMapToolCapture()
 {
+  // during tear down we have to clean up mExtraSnapLayer first, before
+  // we call stop capturing. Otherwise stopCapturing tries to access members
+  // from the mapcanvas, which is likely already being destroyed and triggering
+  // the deletion of this object...
+  mCanvas->snappingUtils()->removeExtraSnapLayer( mExtraSnapLayer );
+  mExtraSnapLayer->deleteLater();
+  mExtraSnapLayer = nullptr;
+
   stopCapturing();
 
   if ( mValidator )
@@ -78,9 +86,6 @@ QgsMapToolCapture::~QgsMapToolCapture()
     mValidator->deleteLater();
     mValidator = nullptr;
   }
-  mCanvas->snappingUtils()->removeExtraSnapLayer( mExtraSnapLayer );
-  mExtraSnapLayer->deleteLater();
-  mExtraSnapLayer = nullptr;
 }
 
 QgsMapToolCapture::Capabilities QgsMapToolCapture::capabilities() const
@@ -457,8 +462,8 @@ int QgsMapToolCapture::fetchLayerPoint( const QgsPointLocator::Match &match, Qgs
 {
   QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( mCanvas->currentLayer() );
   QgsVectorLayer *sourceLayer = match.layer();
-  if ( match.isValid() && ( match.hasVertex() || ( QgsProject::instance()->topologicalEditing() && ( match.hasEdge() || match.hasMiddleSegment() ) ) ) && sourceLayer &&
-       ( sourceLayer->crs() == vlayer->crs() ) )
+  if ( match.isValid() && ( match.hasVertex() || ( QgsProject::instance()->topologicalEditing() && ( match.hasEdge() || match.hasMiddleSegment() ) ) ) && sourceLayer )
+
   {
     QgsFeature f;
     QgsFeatureRequest request;
@@ -478,7 +483,34 @@ int QgsMapToolCapture::fetchLayerPoint( const QgsPointLocator::Match &match, Qgs
           return 2;
         QgsLineString line( geom.constGet()->vertexAt( vId ), geom.constGet()->vertexAt( vId2 ) );
 
-        layerPoint = QgsGeometryUtils::closestPoint( line,  QgsPoint( match.point() ) );
+        QgsPoint pt( match.point() );
+        // Transform point to sourceLayer crs, since vId and vId2 coordinates are in sourceLayer crs
+        if ( sourceLayer->crs() != QgsProject::instance()->crs() )
+        {
+          try
+          {
+            pt.transform( QgsCoordinateTransform( QgsProject::instance()->crs(), sourceLayer->crs(), sourceLayer->transformContext() ) );
+          }
+          catch ( QgsCsException &cse )
+          {
+            Q_UNUSED( cse )
+            QgsDebugMsg( QStringLiteral( "transformation to layer coordinate failed" ) );
+            return 2;
+          }
+        }
+        layerPoint = QgsGeometryUtils::closestPoint( line,  pt );
+        // (re)Transform layerPoint to vlayer crs
+        try
+        {
+          layerPoint.transform( QgsCoordinateTransform( sourceLayer->crs(), vlayer->crs(), vlayer->transformContext() ) );
+        }
+        catch ( QgsCsException &cse )
+        {
+          Q_UNUSED( cse )
+          QgsDebugMsg( QStringLiteral( "transformation to layer coordinate failed" ) );
+          return 2;
+        }
+
       }
       else
       {
@@ -987,6 +1019,9 @@ QgsPoint QgsMapToolCapture::mapPoint( const QgsMapMouseEvent &e ) const
 
 void QgsMapToolCapture::updateExtraSnapLayer()
 {
+  if ( !mExtraSnapLayer )
+    return;
+
   if ( canvas()->snappingUtils()->config().selfSnapping() && mCanvas->currentLayer() && mCaptureCurve.numPoints() >= 2 )
   {
     // the current layer may have changed

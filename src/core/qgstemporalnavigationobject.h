@@ -32,7 +32,7 @@ class QgsMapLayer;
 
 /**
  * \ingroup core
- * Implements a temporal controller based on a frame by frame navigation and animation.
+ * \brief Implements a temporal controller based on a frame by frame navigation and animation.
  *
  * \since QGIS 3.14
  */
@@ -206,7 +206,7 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     /**
      * Returns the best suited frame number for the specified datetime, based on the start of the corresponding temporal range.
      */
-    long findBestFrameNumberForFrameStart( const QDateTime &frameStart ) const;
+    long long findBestFrameNumberForFrameStart( const QDateTime &frameStart ) const;
 
     QgsExpressionContextScope *createExpressionContextScope() const override SIP_FACTORY;
 

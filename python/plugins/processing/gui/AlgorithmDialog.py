@@ -72,7 +72,11 @@ class AlgorithmDialog(QgsProcessingAlgorithmDialogBase):
             self.buttonBox().addButton(self.runAsBatchButton,
                                        QDialogButtonBox.ResetRole)  # reset role to ensure left alignment
         else:
-            self.mainWidget().setParameters({'INPUT': self.active_layer})
+            in_place_input_parameter_name = 'INPUT'
+            if hasattr(alg, 'inputParameterName'):
+                in_place_input_parameter_name = alg.inputParameterName()
+
+            self.mainWidget().setParameters({in_place_input_parameter_name: self.active_layer})
 
             self.runAsBatchButton = None
             has_selection = self.active_layer and (self.active_layer.selectedFeatureCount() > 0)
@@ -115,6 +119,7 @@ class AlgorithmDialog(QgsProcessingAlgorithmDialogBase):
     def runAlgorithm(self):
         self.feedback = self.createFeedback()
         self.context = dataobjects.createContext(self.feedback)
+        self.context.setLogLevel(self.logLevel())
 
         checkCRS = ProcessingConfig.getSetting(ProcessingConfig.WARN_UNMATCHING_CRS)
         try:
@@ -167,6 +172,28 @@ class AlgorithmDialog(QgsProcessingAlgorithmDialogBase):
             self.feedback.pushInfo('')
             start_time = time.time()
 
+            def elapsed_time(start_time, result):
+                delta_t = time.time() - start_time
+                hours = int(delta_t / 3600)
+                minutes = int((delta_t % 3600) / 60)
+                seconds = delta_t - hours * 3600 - minutes * 60
+
+                str_hours = [self.tr("hour"), self.tr("hours")][hours > 1]
+                str_minutes = [self.tr("minute"), self.tr("minutes")][minutes > 1]
+                str_seconds = [self.tr("second"), self.tr("seconds")][seconds != 1]
+
+                if hours > 0:
+                    elapsed = '{0} {1:0.2f} {2} ({3} {4} {5} {6} {7:0.0f} {2})'.format(
+                        result, delta_t, str_seconds, hours, str_hours, minutes, str_minutes, seconds)
+                elif minutes > 0:
+                    elapsed = '{0} {1:0.2f} {2} ({3} {4} {5:0.0f} {2})'.format(
+                        result, delta_t, str_seconds, minutes, str_minutes, seconds)
+                else:
+                    elapsed = '{0} {1:0.2f} {2}'.format(
+                        result, delta_t, str_seconds)
+
+                return(elapsed)
+
             if self.iterateParam:
                 # Make sure the Log tab is visible before executing the algorithm
                 try:
@@ -178,7 +205,7 @@ class AlgorithmDialog(QgsProcessingAlgorithmDialogBase):
                 self.cancelButton().setEnabled(self.algorithm().flags() & QgsProcessingAlgorithm.FlagCanCancel)
                 if executeIterating(self.algorithm(), parameters, self.iterateParam, self.context, self.feedback):
                     self.feedback.pushInfo(
-                        self.tr('Execution completed in {0:0.2f} seconds').format(time.time() - start_time))
+                        self.tr(elapsed_time(start_time, 'Execution completed in')))
                     self.cancelButton().setEnabled(False)
                     self.finish(True, parameters, self.context, self.feedback)
                 else:
@@ -194,13 +221,13 @@ class AlgorithmDialog(QgsProcessingAlgorithmDialogBase):
                 def on_complete(ok, results):
                     if ok:
                         self.feedback.pushInfo(
-                            self.tr('Execution completed in {0:0.2f} seconds').format(time.time() - start_time))
+                            self.tr(elapsed_time(start_time, 'Execution completed in')))
                         self.feedback.pushInfo(self.tr('Results:'))
                         r = {k: v for k, v in results.items() if k not in ('CHILD_RESULTS', 'CHILD_INPUTS')}
                         self.feedback.pushCommandInfo(pformat(r))
                     else:
                         self.feedback.reportError(
-                            self.tr('Execution failed after {0:0.2f} seconds').format(time.time() - start_time))
+                            self.tr(elapsed_time(start_time, 'Execution failed after')))
                     self.feedback.pushInfo('')
 
                     if self.feedback_dialog is not None:

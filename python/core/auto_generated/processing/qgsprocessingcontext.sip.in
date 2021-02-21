@@ -34,6 +34,12 @@ expression context.
     typedef QFlags<QgsProcessingContext::Flag> Flags;
 
 
+    enum LogLevel
+    {
+      DefaultLevel,
+      Verbose,
+    };
+
     QgsProcessingContext();
 %Docstring
 Constructor for QgsProcessingContext.
@@ -348,7 +354,7 @@ Returns the behavior used for checking invalid geometries in input layers.
     void setInvalidGeometryCheck( QgsFeatureRequest::InvalidGeometryCheck check );
 %Docstring
 Sets the behavior used for checking invalid geometries in input layers.
-Settings this to anything but QgsFeatureRequest.GeometryNoCheck will also
+Settings this to anything but :py:class:`QgsFeatureRequest`.GeometryNoCheck will also
 reset the :py:func:`~QgsProcessingContext.invalidGeometryCallback` to a default implementation.
 
 .. seealso:: :py:func:`invalidGeometryCheck`
@@ -558,6 +564,24 @@ function will be used when creating these outputs.
 .. seealso:: :py:func:`setPreferredVectorFormat`
 
 .. versionadded:: 3.10
+%End
+
+    LogLevel logLevel() const;
+%Docstring
+Returns the logging level for algorithms to use when pushing feedback messages to users.
+
+.. seealso:: :py:func:`setLogLevel`
+
+.. versionadded:: 3.20
+%End
+
+    void setLogLevel( LogLevel level );
+%Docstring
+Sets the logging ``level`` for algorithms to use when pushing feedback messages to users.
+
+.. seealso:: :py:func:`logLevel`
+
+.. versionadded:: 3.20
 %End
 
   private:

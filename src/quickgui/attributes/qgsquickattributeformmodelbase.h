@@ -41,7 +41,7 @@ class QVariant;
 
 /**
  * \ingroup quick
- * This is an internal (implementation) class used as the source model for QgsQuickAttributeFormModel.
+ * \brief This is an internal (implementation) class used as the source model for QgsQuickAttributeFormModel.
  *
  * \sa QgsQuickAttributeFormModel
  *
@@ -92,6 +92,9 @@ class QgsQuickAttributeFormModelBase : public QStandardItemModel
     //! \copydoc QgsQuickAttributeFormModelBase::constraintsSoftValid
     bool constraintsSoftValid() const;
 
+    //! Attribute model remembers or not last entered values
+    bool rememberValuesAllowed() const;
+
     /**
      * Gets the value of attribute of the feature in the model
      *
@@ -107,6 +110,9 @@ class QgsQuickAttributeFormModelBase : public QStandardItemModel
 
     //! Resets the model
     Q_INVOKABLE void forceClean();
+
+    //! Allows or forbids attribute model to reuse last entered values
+    void setRememberValuesAllowed( bool rememberValuesAllowed );
 
   signals:
     //! \copydoc QgsQuickAttributeFormModelBase::attributeModel

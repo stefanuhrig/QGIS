@@ -18,7 +18,7 @@
 #ifndef QGSMAPTOOLLABEL_H
 #define QGSMAPTOOLLABEL_H
 
-#include "qgsmaptool.h"
+#include "qgsmaptooladvanceddigitizing.h"
 #include "qgspallabeling.h"
 #include "qgsnewauxiliarylayerdialog.h"
 #include "qgsauxiliarystorage.h"
@@ -30,13 +30,15 @@ typedef QMap<QgsPalLayerSettings::Property, int> QgsPalIndexes;
 typedef QMap<QgsDiagramLayerSettings::Property, int> QgsDiagramIndexes;
 
 //! Base class for map tools that modify label properties
-class APP_EXPORT QgsMapToolLabel: public QgsMapTool
+class APP_EXPORT QgsMapToolLabel: public QgsMapToolAdvancedDigitizing
 {
     Q_OBJECT
 
   public:
-    QgsMapToolLabel( QgsMapCanvas *canvas );
+    QgsMapToolLabel( QgsMapCanvas *canvas, QgsAdvancedDigitizingDockWidget *cadDock );
     ~QgsMapToolLabel() override;
+
+    void deactivate() override;
 
     /**
      * Returns TRUE if label move can be applied to a layer
@@ -84,6 +86,7 @@ class APP_EXPORT QgsMapToolLabel: public QgsMapTool
     bool labelIsRotatable( QgsVectorLayer *layer, const QgsPalLayerSettings &settings, int &rotationCol ) const;
 
   protected:
+    QgsRubberBand *mHoverRubberBand = nullptr;
     QgsRubberBand *mLabelRubberBand = nullptr;
     QgsRubberBand *mFeatureRubberBand = nullptr;
     //! Shows label fixpoint (left/bottom by default)
@@ -102,6 +105,8 @@ class APP_EXPORT QgsMapToolLabel: public QgsMapTool
     //! Currently dragged label position
     LabelDetails mCurrentLabel;
 
+    //! Currently hovered label position
+    LabelDetails mCurrentHoverLabel;
 
     /**
      * Returns label position for mouse click location
@@ -202,6 +207,10 @@ class APP_EXPORT QgsMapToolLabel: public QgsMapTool
     bool createAuxiliaryFields( LabelDetails &details, QgsPalIndexes &palIndexes, bool overwriteExpression = true ) const;
     bool createAuxiliaryFields( QgsDiagramIndexes &diagIndexes, bool overwriteExpression = true );
     bool createAuxiliaryFields( LabelDetails &details, QgsDiagramIndexes &diagIndexes, bool overwriteExpression = true );
+
+    void updateHoveredLabel( QgsMapMouseEvent *e );
+    void clearHoveredLabel();
+    virtual bool canModifyLabel( const LabelDetails &label );
 
     QList<QgsPalLayerSettings::Property> mPalProperties;
     QList<QgsDiagramLayerSettings::Property> mDiagramProperties;

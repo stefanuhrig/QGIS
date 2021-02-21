@@ -225,7 +225,7 @@ QgsProjectProperties::QgsProjectProperties( QgsMapCanvas *mapCanvas, QWidget *pa
   }
   projectionSelector->setPreviewRect( g.boundingBox() );
 
-  mMapTileRenderingCheckBox->setChecked( mMapCanvas->mapSettings().testFlag( QgsMapSettings::RenderMapTile ) );
+  mMapTileRenderingCheckBox->setChecked( QgsProject::instance()->readBoolEntry( QStringLiteral( "RenderMapTile" ), QStringLiteral( "/" ), false ) );
 
   // see end of constructor for updating of projection selector
 
@@ -1052,6 +1052,7 @@ QgsExpressionContext QgsProjectProperties::createExpressionContext() const
 void QgsProjectProperties::apply()
 {
   mMapCanvas->enableMapTileRendering( mMapTileRenderingCheckBox->isChecked() );
+  QgsProject::instance()->writeEntry( QStringLiteral( "RenderMapTile" ), QStringLiteral( "/" ), mMapTileRenderingCheckBox->isChecked() );
 
   // important - set the transform context first, as changing the project CRS may otherwise change this and
   // cause loss of user changes
@@ -1909,7 +1910,7 @@ void QgsProjectProperties::mRemoveWMSPrintLayoutButton_clicked()
 
 void QgsProjectProperties::mAddLayerRestrictionButton_clicked()
 {
-  QgsProjectLayerGroupDialog d( this, QgsProject::instance()->fileName() );
+  QgsProjectLayerGroupDialog d( QgsProject::instance(), this );
   d.setWindowTitle( tr( "Select Restricted Layers and Groups" ) );
   if ( d.exec() == QDialog::Accepted )
   {

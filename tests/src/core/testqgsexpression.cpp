@@ -1405,6 +1405,11 @@ class TestQgsExpression: public QObject
       QTest::newRow( "nullif substitute double" ) << "nullif(3.3, 3.3)" << false << QVariant();
       QTest::newRow( "nullif substitute int" ) << "nullif(0, 0)" << false << QVariant();
       QTest::newRow( "regexp match" ) << "regexp_match('abc','.b.')" << false << QVariant( 1 );
+      // testing unicode and \b, see #41453. \b tests for a 'word boundary'
+      QTest::newRow( "regexp match unicode" ) << "regexp_match('Budač','Buda\\\\b')" << false << QVariant( 0 );
+      QTest::newRow( "regexp match unicode 2" ) << "regexp_match('Buda','Buda\\\\b')" << false << QVariant( 1 );
+      QTest::newRow( "regexp match unicode 3" ) << "regexp_match('Budač','Budač\\\\b')" << false << QVariant( 1 );
+
       QTest::newRow( "regexp match invalid" ) << "regexp_match('abc DEF','[[[')" << true << QVariant();
       QTest::newRow( "regexp match escaped" ) << "regexp_match('abc DEF','\\\\s[A-Z]+')" << false << QVariant( 4 );
       QTest::newRow( "regexp match false" ) << "regexp_match('abc DEF','\\\\s[a-z]+')" << false << QVariant( 0 );
@@ -1488,7 +1493,11 @@ class TestQgsExpression: public QObject
       QTest::newRow( "formatted string from date with language" ) << "format_date('2019-06-29','d MMMM yyyy','fr')" << false << QVariant( QString( "29 juin 2019" ) );
 
       // Color functions
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
       QTest::newRow( "ramp color" ) << "ramp_color('Spectral',0.3)" << false << QVariant( "254,190,116,255" );
+#else
+      QTest::newRow( "ramp color" ) << "ramp_color('Spectral',0.3)" << false << QVariant( "253,190,116,255" );
+#endif
       QTest::newRow( "create ramp color, wrong parameter" ) << "create_ramp(1)" << true << QVariant();
       QTest::newRow( "create ramp color, no color" ) << "create_ramp(map())" << true << QVariant();
       QTest::newRow( "create ramp color, one color" ) << "ramp_color(create_ramp(map(0,'0,0,0')),0.5)" << false << QVariant( "0,0,0,255" );
@@ -1534,14 +1543,22 @@ class TestQgsExpression: public QObject
       QTest::newRow( "set color part saturation" ) << "to_int(color_part(set_color_part(color_hsv(40,100,80),'saturation',40),'saturation'))" << false << QVariant( 40 );
       QTest::newRow( "set color part value" ) << "to_int(color_part(set_color_part(color_hsv(40,100,80),'value',50),'value'))" << false << QVariant( 50 );
       QTest::newRow( "set color part hsl_hue" ) << "to_int(color_part(set_color_part(color_hsl(100,50,70),'hsl_hue',270),'hsl_hue'))" << false << QVariant( 270 );
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
       QTest::newRow( "set color part hsl_saturation" ) << "to_int(color_part(set_color_part(color_hsl(100,50,70),'hsl_saturation',30),'hsl_saturation'))" << false << QVariant( 30 );
+#else
+      QTest::newRow( "set color part hsl_saturation" ) << "to_int(color_part(set_color_part(color_hsl(100,50,70),'hsl_saturation',30),'hsl_saturation'))" << false << QVariant( 29 );
+#endif
       QTest::newRow( "set color part lightness" ) << "to_int(color_part(set_color_part(color_hsl(100,50,70),'lightness',20),'lightness'))" << false << QVariant( 20 );
       QTest::newRow( "set color part cyan" ) << "to_int(color_part(set_color_part(color_cmyk(21,0,92,70),'cyan',12),'cyan'))" << false << QVariant( 12 );
       QTest::newRow( "set color part magenta" ) << "to_int(color_part(set_color_part(color_cmyk(0,10,90,76),'magenta',31),'magenta'))" << false << QVariant( 31 );
       QTest::newRow( "set color part yellow" ) << "to_int(color_part(set_color_part(color_cmyk(21,0,92,70),'yellow',96),'yellow'))" << false << QVariant( 96 );
       QTest::newRow( "set color part black" ) << "to_int(color_part(set_color_part(color_cmyk(21,0,92,70),'black',100),'black'))" << false << QVariant( 100 );
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
       QTest::newRow( "color darker" ) << "darker('200,100,30',150)" << false << QVariant( "133,66,20,255" );
+#else
+      QTest::newRow( "color darker" ) << "darker('200,100,30',150)" << false << QVariant( "133,67,20,255" );
+#endif
       QTest::newRow( "color darker bad color" ) << "darker('notacolor',150)" << true << QVariant();
       QTest::newRow( "color lighter" ) << "lighter('200,100,30',150)" << false << QVariant( "255,154,83,255" );
       QTest::newRow( "color lighter bad color" ) << "lighter('notacolor',150)" << true << QVariant();
@@ -1590,6 +1607,13 @@ class TestQgsExpression: public QObject
       QTest::newRow( "layer_property attribution with metadata" ) << QStringLiteral( "array_to_string(layer_property('%1','attribution'))" ).arg( mPointsLayerMetadata->name() ) << false << QVariant( "right1,right2" );
 
       QTest::newRow( "decode_uri shp path" ) << QStringLiteral( "array_last(string_to_array(replace(decode_uri('%1', 'path'), '\\\\', '/'), '/'))" ).arg( mPointsLayer->name() ) << false << QVariant( "points.shp" );
+
+      // Mime type
+      QTest::newRow( "mime_type empty" ) << QStringLiteral( "mime_type('')" ) << false << QVariant( "application/x-zerosize" );
+      QTest::newRow( "mime_type ascii" ) << QStringLiteral( "mime_type('TEXT')" ) << false << QVariant( "text/plain" );
+      QTest::newRow( "mime_type gif" ) << QStringLiteral( "mime_type(from_base64('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAIAOw=='))" ) << false << QVariant( "image/gif" );
+      QTest::newRow( "mime_type pdf" ) << QStringLiteral( "mime_type(from_base64('JVBERi0xLgp0cmFpbGVyPDwvUm9vdDw8L1BhZ2VzPDwvS2lkc1s8PC9NZWRpYUJveFswIDAgMyAzXT4+XT4+Pj4+Pg=='))" ) << false << QVariant( "application/pdf" );
+      QTest::newRow( "mime_type html" ) << QStringLiteral( "mime_type('<html><body></body></html>')" ) << false << QVariant( "text/html" );
 
       // raster_statistic tests
       QTest::newRow( "raster_statistic no layer" ) << "raster_statistic('',1,'min')" << false << QVariant();
@@ -1640,7 +1664,7 @@ class TestQgsExpression: public QObject
       QTest::newRow( "array_last(array('a', 'b', 'c'))" ) << QStringLiteral( "array_last(array('a', 'b', 'c'))" ) << false << QVariant( "c" );
       QTest::newRow( "array_last(array())" ) << QStringLiteral( "array_last(array())" ) << false << QVariant();
 
-      // array_min, array_max, array_mean, array_median, array_majority, array_sum
+      // array_min, array_max, array_mean, array_median, array_majority, array_minority, array_sum
       QTest::newRow( "array_min('forty two')" ) << QStringLiteral( "array_min('forty two')" ) << true << QVariant();
       QTest::newRow( "array_min(42)" ) << QStringLiteral( "array_min(42)" ) << true << QVariant();
       QTest::newRow( "array_min(array())" ) << QStringLiteral( "array_min(array())" ) << false << QVariant();
@@ -1663,8 +1687,30 @@ class TestQgsExpression: public QObject
       QTest::newRow( "array_median(array(0,0,1,2,2,42,'a','b'))" ) << QStringLiteral( "array_median(array(0,0,1,2,2,42,'a','b'))" ) << false << QVariant( 1.5 );
       QTest::newRow( "array_majority('forty two')" ) << QStringLiteral( "array_majority('forty two')" ) << true << QVariant();
       QTest::newRow( "array_majority(42)" ) << QStringLiteral( "array_majority(42)" ) << true << QVariant();
-      QTest::newRow( "array_majority(array())" ) << QStringLiteral( "array_majority(array())" ) << false << QVariant();
-      QTest::newRow( "array_majority(array(1,2,42,42,'a','b'))" ) << QStringLiteral( "array_majority(array(1,2,42,42,'a','b'))" ) << false << QVariant( QVariantList() << 42 );
+      QTest::newRow( "array_majority(array())" ) << QStringLiteral( "array_majority(array())" ) << false << QVariant( QVariantList() );
+      QTest::newRow( "array_majority(array(0,1,42,42,43), 'all')" ) << QStringLiteral( "array_majority(array(0,1,42,42,43), 'all')" ) << false << QVariant( QVariantList() << 42 );
+      QTest::newRow( "array_majority(array(0,1,43,'a','a','b'), 'all')" ) << QStringLiteral( "array_majority(array(0,1,43,'a','a','b'), 'all')" ) << false << QVariant( QVariantList() << "a" );
+      QTest::newRow( "array_majority(array(0,1,42,42,43,1)" ) << QStringLiteral( "array_sort(array_majority(array(0,1,42,42,43,1)))" ) << false << QVariant( QVariantList() << 1 << 42 );
+      QTest::newRow( "array_majority(array(0,1,42,42,43), 'any')" ) << QStringLiteral( "array_majority(array(0,1,42,42,43), 'any')" ) << false << QVariant( 42 );
+      QTest::newRow( "array_majority(array(0,1,1,2,2,42), 'median')" ) << QStringLiteral( "array_majority(array(0,1,1,2,2,42), 'median')" ) << false << QVariant( 1.5 );
+      QTest::newRow( "array_majority(array(0,1,1,2,2,42,'a','b'), 'median')" ) << QStringLiteral( "array_majority(array(0,1,1,2,2,42,'a','b'), 'median')" ) << false << QVariant( 1.5 );
+      QTest::newRow( "array_majority(array(0,1,2,42,'a','b','a'), 'median')" ) << QStringLiteral( "array_majority(array(0,1,2,42,'a','b','a'), 'median')" ) << false << QVariant();
+      QTest::newRow( "array_majority(array(0,1,42,42,43), 'real_majority')" ) << QStringLiteral( "array_majority(array(0,1,42,42,43), 'real_majority')" ) << false << QVariant();
+      QTest::newRow( "array_majority(array(0,1,42,42,43,42), 'real_majority')" ) << QStringLiteral( "array_majority(array(0,1,42,42,43,42), 'real_majority')" ) << false << QVariant();
+      QTest::newRow( "array_majority(array(0,1,42,42,43,42,42), 'real_majority')" ) << QStringLiteral( "array_majority(array(0,1,42,42,43,42,42), 'real_majority')" ) << false << QVariant( 42 );
+      QTest::newRow( "array_minority('forty two')" ) << QStringLiteral( "array_minority('forty two')" ) << true << QVariant();
+      QTest::newRow( "array_minority(42)" ) << QStringLiteral( "array_minority(42)" ) << true << QVariant();
+      QTest::newRow( "array_minority(array())" ) << QStringLiteral( "array_minority(array())" ) << false << QVariant( QVariantList() );
+      QTest::newRow( "array_minority(array(0,42,42), 'all')" ) << QStringLiteral( "array_minority(array(0,42,42), 'all')" ) << false << QVariant( QVariantList() << 0 );
+      QTest::newRow( "array_minority(array(42,42,'a'), 'all')" ) << QStringLiteral( "array_minority(array(42,42,'a'), 'all')" ) << false << QVariant( QVariantList() << "a" );
+      QTest::newRow( "array_minority(array(0,1,42,42))" ) << QStringLiteral( "array_sort(array_minority(array(0,1,42,42)))" ) << false << QVariant( QVariantList() << 0 << 1 );
+      QTest::newRow( "array_minority(array(0,42,42), 'any')" ) << QStringLiteral( "array_minority(array(0,42,42), 'any')" ) << false << QVariant( 0 );
+      QTest::newRow( "array_minority(array(1,2,3,3), 'median')" ) << QStringLiteral( "array_minority(array(1,2,3,3), 'median')" ) << false << QVariant( 1.5 );
+      QTest::newRow( "array_minority(array(1,2,3,3,'a'), 'median')" ) << QStringLiteral( "array_minority(array(1,2,3,3,'a'), 'median')" ) << false << QVariant( 1.5 );
+      QTest::newRow( "array_minority(array(1,1,3,3,'a'), 'median')" ) << QStringLiteral( "array_minority(array(1,1,3,3,'a'), 'median')" ) << false << QVariant();
+      QTest::newRow( "array_minority(array(0,1,42,42,43), 'real_minority')" ) << QStringLiteral( "array_sort(array_minority(array(0,1,42,42,43), 'real_minority'))" ) << false << QVariant( QVariantList() << 0 << 1 << 42 << 43 );
+      QTest::newRow( "array_minority(array(0,1,42,42,43,42), 'real_minority')" ) << QStringLiteral( "array_sort(array_minority(array(0,1,42,42,43,42), 'real_minority'))" ) << false << QVariant( QVariantList() << 0 << 1 << 42 << 43 );
+      QTest::newRow( "array_minority(array(0,1,42,42,43,42,42), 'real_minority')" ) << QStringLiteral( "array_sort(array_minority(array(0,1,42,42,43,42,42), 'real_minority'))" ) << false << QVariant( QVariantList() << 0 << 1 << 43 );
       QTest::newRow( "array_sum('forty two')" ) << QStringLiteral( "array_sum('forty two')" ) << true << QVariant();
       QTest::newRow( "array_sum(42)" ) << QStringLiteral( "array_sum(42)" ) << true << QVariant();
       QTest::newRow( "array_sum(array())" ) << QStringLiteral( "array_sum(array())" ) << false << QVariant();
@@ -2709,7 +2755,7 @@ class TestQgsExpression: public QObject
       QTest::newRow( "geom y" ) << "$y" << QgsGeometry::fromPointXY( point ) << false << QVariant( 456. );
       QTest::newRow( "geom xat" ) << "xat(-1)" << QgsGeometry::fromPolylineXY( line ) << false << QVariant( 3. );
       QTest::newRow( "geom yat" ) << "yat(1)" << QgsGeometry::fromPolylineXY( line ) << false << QVariant( 2. );
-      QTest::newRow( "null geometry" ) << "$geometry" << QgsGeometry() << false << QVariant( QVariant::UserType );
+      QTest::newRow( "null geometry" ) << "$geometry" << QgsGeometry() << false << QVariant();
     }
 
     void eval_geometry()
@@ -4090,9 +4136,11 @@ class TestQgsExpression: public QObject
       QTest::newRow( "not equality" ) << ( QStringList() << QStringLiteral( "field <> 'value'" ) ) << false << "field";
       QTest::newRow( "one expression" ) << ( QStringList() << QStringLiteral( "field = 'value'" ) ) << true << "field IN ('value')";
       QTest::newRow( "one IN expression" ) << ( QStringList() << QStringLiteral( "field IN ('value', 'value2')" ) ) << true << "field IN ('value','value2')";
+      QTest::newRow( "one NOT IN expression" ) << ( QStringList() << QStringLiteral( "field NOT IN ('value', 'value2')" ) ) << false << "field NOT IN ('value','value2')";
       QTest::newRow( "one IN expression non-literal" ) << ( QStringList() << QStringLiteral( "field IN ('value', 'value2', \"a field\")" ) ) << false << QString();
       QTest::newRow( "two expressions" ) << ( QStringList() << QStringLiteral( "field = 'value'" )  << QStringLiteral( "field = 'value2'" ) ) << true << "field IN ('value','value2')";
       QTest::newRow( "two expressions with IN" ) << ( QStringList() << QStringLiteral( "field = 'value'" )  << QStringLiteral( "field IN ('value2', 'value3')" ) ) << true << "field IN ('value','value2','value3')";
+      QTest::newRow( "two expressions with a not IN" ) << ( QStringList() << QStringLiteral( "field = 'value'" )  << QStringLiteral( "field NOT IN ('value2', 'value3')" ) ) << false << QString();
       QTest::newRow( "two expressions with IN not literal" ) << ( QStringList() << QStringLiteral( "field = 'value'" )  << QStringLiteral( "field IN ('value2', 'value3', \"a field\")" ) ) << false << QString();
       QTest::newRow( "two expressions with IN different field" ) << ( QStringList() << QStringLiteral( "field = 'value'" )  << QStringLiteral( "field2 IN ('value2', 'value3')" ) ) << false << QString();
       QTest::newRow( "two expressions first not equality" ) << ( QStringList() << QStringLiteral( "field <>'value'" )  << QStringLiteral( "field == 'value2'" ) ) << false << "field";
@@ -4114,6 +4162,66 @@ class TestQgsExpression: public QObject
       {
         QCOMPARE( resExpression, expression );
       }
+    }
+
+    void testPrecomputedNodesWithIntrospectionFunctions()
+    {
+      QgsFields fields;
+      fields.append( QgsField( QStringLiteral( "first_field" ), QVariant::Int ) );
+      fields.append( QgsField( QStringLiteral( "second_field" ), QVariant::Int ) );
+
+      QgsExpression exp( QStringLiteral( "attribute(@static_feature, concat('second','_',@field_name_part_var)) + x(geometry( @static_feature ))" ) );
+      // initially this expression requires all attributes -- we can't determine the referenced columns in advance
+      QCOMPARE( exp.referencedColumns(), QSet<QString>() << QgsFeatureRequest::ALL_ATTRIBUTES );
+      QCOMPARE( exp.referencedAttributeIndexes( fields ), QSet< int >() << 0 << 1 );
+      QCOMPARE( exp.referencedFunctions(), QSet<QString>() << QStringLiteral( "attribute" ) << QStringLiteral( "concat" ) << QStringLiteral( "geometry" ) << QStringLiteral( "x" ) << QStringLiteral( "var" ) );
+      QCOMPARE( exp.referencedVariables(), QSet<QString>() << QStringLiteral( "field_name_part_var" ) << QStringLiteral( "static_feature" ) );
+
+      // prepare the expression using static variables
+      QgsExpressionContext context;
+      std::unique_ptr< QgsExpressionContextScope > scope = qgis::make_unique< QgsExpressionContextScope >();
+      scope->setVariable( QStringLiteral( "field_name_part_var" ), QStringLiteral( "field" ), true );
+
+      // this feature gets added as a static variable, to emulate eg the @atlas_feature variable
+      QgsFeature feature( fields );
+      feature.setAttributes( QgsAttributes() << 5 << 10 );
+      feature.setGeometry( QgsGeometry::fromPointXY( QgsPointXY( 27, 42 ) ) );
+      scope->setVariable( QStringLiteral( "static_feature" ), feature, true );
+
+      context.appendScope( scope.release() );
+
+      QVERIFY( exp.prepare( & context ) );
+      // because all parts of the expression are static, the root node should have a cached static value!
+      QVERIFY( exp.rootNode()->hasCachedStaticValue() );
+      QCOMPARE( exp.rootNode()->cachedStaticValue().toInt(), 37 );
+
+      // referenced columns should be empty -- we don't need ANY columns to evaluate this expression
+      QVERIFY( exp.referencedColumns().empty() );
+      QVERIFY( exp.referencedAttributeIndexes( fields ).empty() );
+      // in contrast, referencedFunctions() and referencedVariables() should NOT be affected by pre-compiled nodes
+      // as these methods are used for introspection purposes only...
+      QCOMPARE( exp.referencedFunctions(), QSet<QString>() << QStringLiteral( "attribute" ) << QStringLiteral( "concat" ) << QStringLiteral( "geometry" ) << QStringLiteral( "x" ) << QStringLiteral( "var" ) );
+      QCOMPARE( exp.referencedVariables(), QSet<QString>() << QStringLiteral( "field_name_part_var" ) << QStringLiteral( "static_feature" ) );
+
+      // secondary test - this one uses a mix of pre-computable nodes and non-pre-computable nodes
+      QgsExpression exp2( QStringLiteral( "(attribute(@static_feature, concat('second','_',@field_name_part_var)) + x(geometry( @static_feature ))) > \"another_field\"" ) );
+      QCOMPARE( exp2.referencedColumns(), QSet<QString>() << QgsFeatureRequest::ALL_ATTRIBUTES << QStringLiteral( "another_field" ) );
+      QCOMPARE( exp2.referencedFunctions(), QSet<QString>() << QStringLiteral( "attribute" ) << QStringLiteral( "concat" ) << QStringLiteral( "geometry" ) << QStringLiteral( "x" ) << QStringLiteral( "var" ) );
+      QCOMPARE( exp2.referencedVariables(), QSet<QString>() << QStringLiteral( "field_name_part_var" ) << QStringLiteral( "static_feature" ) );
+
+      QgsFields fields2;
+      fields2.append( QgsField( QStringLiteral( "another_field" ), QVariant::Int ) );
+      context.setFields( fields2 );
+
+      QVERIFY( exp2.prepare( & context ) );
+      // because NOT all parts of the expression are static, the root node should NOT have a cached static value!
+      QVERIFY( !exp2.rootNode()->hasCachedStaticValue() );
+
+      // but the only referenced column should be "another_field", because the first half of the expression with the "attribute" function is static and has been precomputed
+      QCOMPARE( exp2.referencedColumns(), QSet<QString>() << QStringLiteral( "another_field" ) );
+      QCOMPARE( exp2.referencedAttributeIndexes( fields2 ), QSet< int >() << 0 );
+      QCOMPARE( exp2.referencedFunctions(), QSet<QString>() << QStringLiteral( "attribute" ) << QStringLiteral( "concat" ) << QStringLiteral( "geometry" ) << QStringLiteral( "x" ) << QStringLiteral( "var" ) );
+      QCOMPARE( exp2.referencedVariables(), QSet<QString>() << QStringLiteral( "field_name_part_var" ) << QStringLiteral( "static_feature" ) );
     }
 
 };

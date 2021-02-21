@@ -150,6 +150,8 @@ class GdalUtils:
             raise QgsProcessingException(GdalUtils.tr('Process was unexpectedly terminated'))
         elif res == 0:
             feedback.pushInfo(GdalUtils.tr('Process completed successfully'))
+        elif proc.processError() == QProcess.FailedToStart:
+            raise QgsProcessingException(GdalUtils.tr('Process {} failed to start. Either {} is missing, or you may have insufficient permissions to run the program.').format(command, command))
         else:
             feedback.reportError(GdalUtils.tr('Process returned error code {}').format(res))
 
@@ -248,7 +250,7 @@ class GdalUtils:
 
     @staticmethod
     def escapeAndJoin(strList):
-        escChars = [' ', '&', '(', ')']
+        escChars = [' ', '&', '(', ')', '"']
         joined = ''
         for s in strList:
             if not isinstance(s, str):
@@ -358,7 +360,7 @@ class GdalUtils:
             if dsUri.host() != "":
                 ogrstr += delim + dsUri.host()
                 delim = ""
-                if dsUri.port() != "" and dsUri.port() != '1521':
+                if dsUri.port() not in ["", '1521']:
                     ogrstr += ":" + dsUri.port()
                 ogrstr += "/"
                 if dsUri.database() != "":

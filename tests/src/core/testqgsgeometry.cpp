@@ -54,9 +54,40 @@
 #include "qgslinesegment.h"
 #include "qgsgeos.h"
 #include "qgsreferencedgeometry.h"
+#include "qgsgeometrytransformer.h"
 
 //qgs unit test utility class
 #include "qgsrenderchecker.h"
+
+class TestTransformer : public QgsAbstractGeometryTransformer
+{
+  public:
+
+    bool transformPoint( double &x, double &y, double &z, double &m ) override
+    {
+      x *= 3;
+      y += 14;
+      z += 5;
+      m -= 1;
+      return true;
+    }
+};
+
+
+class TestFailTransformer : public QgsAbstractGeometryTransformer
+{
+  public:
+
+    bool transformPoint( double &x, double &y, double &z, double &m ) override
+    {
+      x *= 3;
+      y += 14;
+      z += 5;
+      m -= 1;
+      return false;
+    }
+};
+
 
 /**
  * \ingroup UnitTests
@@ -151,6 +182,7 @@ class TestQgsGeometry : public QObject
 
     void makeValid();
 
+    void isSimple_data();
     void isSimple();
 
     void reshapeGeometryLineMerge();
@@ -612,6 +644,13 @@ void TestQgsGeometry::geos()
   QCOMPARE( GEOSGetNumGeometries_r( QgsGeos::getGEOSHandler(), asGeos.get() ), 2 );
   res = QgsGeometry( QgsGeos::fromGeos( asGeos.get() ) );
   QCOMPARE( res.asWkt(), QStringLiteral( "MultiPolygon (((0 0, 0 1, 1 1, 0 0)),((10 0, 10 1, 11 1, 10 0)))" ) );
+
+  // Empty geometry
+  QgsPoint point;
+  asGeos = QgsGeos::asGeos( &point );
+  // should be treated as a null geometry, not an empty point in order to maintain api compatibility with
+  // earlier QGIS 3.x releases
+  QVERIFY( !QgsGeos::fromGeos( asGeos.get() ) );
 }
 
 void TestQgsGeometry::point()
@@ -952,12 +991,13 @@ void TestQgsGeometry::point()
   QGSCOMPARENEAR( p16.y(), -3626584, 1 );
   QGSCOMPARENEAR( p16.z(), 1.0, 0.001 );
   QCOMPARE( p16.m(), 2.0 );
+#if PROJ_VERSION_MAJOR<6 // note - z value transform doesn't currently work with proj 6+, because we don't yet support compound CRS definitions
   //test with z transform
   p16.transform( tr, QgsCoordinateTransform::ForwardTransform, true );
   QGSCOMPARENEAR( p16.z(), -19.249, 0.001 );
   p16.transform( tr, QgsCoordinateTransform::ReverseTransform, true );
   QGSCOMPARENEAR( p16.z(), 1.0, 0.001 );
-
+#endif
   //QTransform transform
   QTransform qtr = QTransform::fromScale( 2, 3 );
   QgsPoint p17( QgsWkbTypes::PointZM, 10, 20, 30, 40 );
@@ -1335,6 +1375,18 @@ void TestQgsGeometry::point()
   QVERIFY( std::isnan( p.m() ) );
   QCOMPARE( p.wkbType(), QgsWkbTypes::Point );
 
+  // transform using class
+  p = QgsPoint( 1.1, 2.2, 3.3, 4.4, QgsWkbTypes::PointZM );
+  TestTransformer transformer;
+  QVERIFY( p.transform( &transformer ) );
+  QCOMPARE( p.x(), 3.3 );
+  QCOMPARE( p.y(), 16.2 );
+  QCOMPARE( p.z(), 8.3 );
+  QCOMPARE( p.m(), 3.4 );
+  QCOMPARE( p.wkbType(), QgsWkbTypes::PointZM );
+
+  TestFailTransformer failTransformer;
+  QVERIFY( !p.transform( &failTransformer ) );
 }
 
 void TestQgsGeometry::circularString()
@@ -2024,6 +2076,7 @@ void TestQgsGeometry::circularString()
   QGSCOMPARENEAR( l22.pointN( 1 ).z(), 3, 0.001 );
   QCOMPARE( l22.pointN( 1 ).m(), 4.0 );
 
+#if PROJ_VERSION_MAJOR<6 // note - z value transform doesn't currently work with proj 6+, because we don't yet support compound CRS definitions
   //z value transform
   l22.transform( tr, QgsCoordinateTransform::ForwardTransform, true );
   QGSCOMPARENEAR( l22.pointN( 0 ).z(), -19.249066, 0.001 );
@@ -2031,6 +2084,7 @@ void TestQgsGeometry::circularString()
   l22.transform( tr, QgsCoordinateTransform::ReverseTransform, true );
   QGSCOMPARENEAR( l22.pointN( 0 ).z(), 1.0, 0.001 );
   QGSCOMPARENEAR( l22.pointN( 1 ).z(), 3.0, 0.001 );
+#endif
 
   //QTransform transform
   QTransform qtr = QTransform::fromScale( 2, 3 );
@@ -2832,6 +2886,17 @@ void TestQgsGeometry::circularString()
   transformLine.transformVertices( transform );
   QCOMPARE( transformLine.asWkt( 2 ), QStringLiteral( "CircularStringZM (3 5 7 11, 6 15 17 21, 113 15 27 31)" ) );
 
+  // transform using class
+  QgsCircularString transformLine2;
+  TestTransformer transformer;
+  // no crash
+  QVERIFY( transformLine2.transform( &transformer ) );
+  transformLine2.setPoints( QgsPointSequence() << QgsPoint( 1, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 4, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 111, 12, 23, 24, QgsWkbTypes::PointZM ) );
+  QVERIFY( transformLine2.transform( &transformer ) );
+  QCOMPARE( transformLine2.asWkt( 2 ), QStringLiteral( "CircularStringZM (3 16 8 3, 12 26 18 13, 333 26 28 23)" ) );
+
+  TestFailTransformer failTransformer;
+  QVERIFY( !transformLine2.transform( &failTransformer ) );
 
   // substring
   QgsCircularString substring;
@@ -4021,6 +4086,7 @@ void TestQgsGeometry::lineString()
   QGSCOMPARENEAR( l22.pointN( 1 ).z(), 3, 0.001 );
   QCOMPARE( l22.pointN( 1 ).m(), 4.0 );
 
+#if PROJ_VERSION_MAJOR<6 // note - z value transform doesn't currently work with proj 6+, because we don't yet support compound CRS definitions
   //z value transform
   l22.transform( tr, QgsCoordinateTransform::ForwardTransform, true );
   QGSCOMPARENEAR( l22.pointN( 0 ).z(), -19.249066, 0.001 );
@@ -4028,6 +4094,7 @@ void TestQgsGeometry::lineString()
   l22.transform( tr, QgsCoordinateTransform::ReverseTransform, true );
   QGSCOMPARENEAR( l22.pointN( 0 ).z(), 1.0, 0.001 );
   QGSCOMPARENEAR( l22.pointN( 1 ).z(), 3.0, 0.001 );
+#endif
 
   //QTransform transform
   QTransform qtr = QTransform::fromScale( 2, 3 );
@@ -4934,6 +5001,18 @@ void TestQgsGeometry::lineString()
   transformLine.setPoints( QgsPointSequence()  << QgsPoint( 11, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 1, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 4, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 111, 12, 23, 24, QgsWkbTypes::PointZM ) );
   transformLine.transformVertices( transform );
   QCOMPARE( transformLine.asWkt( 2 ), QStringLiteral( "LineStringZM (16 8 10 12, 6 8 10 12, 9 18 20 22, 116 18 30 32)" ) );
+
+  // transform using class
+  QgsLineString transformLine2;
+  TestTransformer transformer;
+  // no crash
+  QVERIFY( transformLine2.transform( &transformer ) );
+  transformLine2.setPoints( QgsPointSequence()  << QgsPoint( 11, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 1, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 4, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 111, 12, 23, 24, QgsWkbTypes::PointZM ) );
+  QVERIFY( transformLine2.transform( &transformer ) );
+  QCOMPARE( transformLine2.asWkt( 2 ), QStringLiteral( "LineStringZM (33 16 8 3, 3 16 8 3, 12 26 18 13, 333 26 28 23)" ) );
+
+  TestFailTransformer failTransformer;
+  QVERIFY( !transformLine2.transform( &failTransformer ) );
 
   // substring
   QgsLineString substring;
@@ -6160,6 +6239,7 @@ void TestQgsGeometry::polygon()
   QGSCOMPARENEAR( intR->boundingBox().xMaximum(), 6474984, 100 );
   QGSCOMPARENEAR( intR->boundingBox().yMaximum(), -3526584, 100 );
 
+#if PROJ_VERSION_MAJOR<6 // note - z value transform doesn't currently work with proj 6+, because we don't yet support compound CRS definitions
   //z value transform
   pTransform.transform( tr, QgsCoordinateTransform::ForwardTransform, true );
   extR = static_cast< const QgsLineString * >( pTransform.exteriorRing() );
@@ -6183,6 +6263,7 @@ void TestQgsGeometry::polygon()
   QGSCOMPARENEAR( intR->pointN( 1 ).z(), 3, 0.001 );
   QGSCOMPARENEAR( intR->pointN( 2 ).z(), 5, 0.001 );
   QGSCOMPARENEAR( intR->pointN( 3 ).z(), 1, 0.001 );
+#endif
 
   //QTransform transform
   QTransform qtr = QTransform::fromScale( 2, 3 );
@@ -6907,6 +6988,24 @@ void TestQgsGeometry::polygon()
   transformPolygon.transformVertices( transform );
   QCOMPARE( transformPolygon.asWkt( 2 ), QStringLiteral( "PolygonZM ((15 8 11 14, 8 18 21 24, 15 18 21 24, 15 28 31 34, 15 8 11 14),(12 5 9 11, 6 15 17 19, 13.01 5.01 19 21, 13 5.01 29 31, 13 5 9 11, 12 5 9 11),(3 5 9 11, 13.01 5.01 19 21, 13 5.01 29 31, 3 5 9 11))" ) );
 
+  // transform using class
+  QgsPolygon transformPolygon2;
+  TestTransformer transformer;
+  // no crash
+  QVERIFY( transformPolygon2.transform( &transformer ) );
+  transformPolygonRing.setPoints( QgsPointSequence() << QgsPoint( 11, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 4, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 11, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 11, 22, 23, 24, QgsWkbTypes::PointZM ) << QgsPoint( 11, 2, 3, 4, QgsWkbTypes::PointZM ) );
+  transformPolygon2.setExteriorRing( transformPolygonRing.clone() );
+  QVERIFY( transformPolygon2.transform( &transformer ) );
+  QCOMPARE( transformPolygon2.asWkt( 2 ), QStringLiteral( "PolygonZM ((33 16 8 3, 12 26 18 13, 33 26 18 13, 33 36 28 23, 33 16 8 3))" ) );
+  transformPolygonRing.setPoints( QgsPointSequence() << QgsPoint( 10, 2, 5, 6, QgsWkbTypes::PointZM ) << QgsPoint( 4, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 11.01, 2.01, 15, 16, QgsWkbTypes::PointZM ) << QgsPoint( 11, 2.01, 25, 26, QgsWkbTypes::PointZM ) << QgsPoint( 11, 2, 5, 6, QgsWkbTypes::PointZM ) << QgsPoint( 10, 2, 5, 6, QgsWkbTypes::PointZM ) );
+  transformPolygon2.addInteriorRing( transformPolygonRing.clone() );
+  transformPolygonRing.setPoints( QgsPointSequence() << QgsPoint( 1, 2, 5, 6, QgsWkbTypes::PointZM ) << QgsPoint( 11.01, 2.01, 15, 16, QgsWkbTypes::PointZM ) << QgsPoint( 11, 2.01, 25, 26, QgsWkbTypes::PointZM ) << QgsPoint( 1, 2, 5, 6, QgsWkbTypes::PointZM ) );
+  transformPolygon2.addInteriorRing( transformPolygonRing.clone() );
+  QVERIFY( transformPolygon2.transform( &transformer ) );
+  QCOMPARE( transformPolygon2.asWkt( 2 ), QStringLiteral( "PolygonZM ((99 30 13 2, 36 40 23 12, 99 40 23 12, 99 50 33 22, 99 30 13 2),(30 16 10 5, 12 26 18 13, 33.03 16.01 20 15, 33 16.01 30 25, 33 16 10 5, 30 16 10 5),(3 16 10 5, 33.03 16.01 20 15, 33 16.01 30 25, 3 16 10 5))" ) );
+
+  TestFailTransformer failTransformer;
+  QVERIFY( !transformPolygon2.transform( &failTransformer ) );
 
   // remove invalid rings
   QgsPolygon invalidRingPolygon;
@@ -10748,6 +10847,7 @@ void TestQgsGeometry::compoundCurve()
   QGSCOMPARENEAR( pt.z(), 5.0, 0.001 );
   QCOMPARE( pt.m(), 6.0 );
 
+#if PROJ_VERSION_MAJOR<6 // note - z value transform doesn't currently work with proj 6+, because we don't yet support compound CRS definitions
   //z value transform
   c22.transform( tr, QgsCoordinateTransform::ForwardTransform, true );
   c22.pointAt( 0, pt, v );
@@ -10764,6 +10864,7 @@ void TestQgsGeometry::compoundCurve()
   QGSCOMPARENEAR( pt.z(), 3, 0.001 );
   c22.pointAt( 2, pt, v );
   QGSCOMPARENEAR( pt.z(), 5, 0.001 );
+#endif
 
   //QTransform transform
   QTransform qtr = QTransform::fromScale( 2, 3 );
@@ -12017,6 +12118,22 @@ void TestQgsGeometry::compoundCurve()
   transformCurve.addCurve( lsTransform.clone() );
   transformCurve.transformVertices( transform );
   QCOMPARE( transformCurve.asWkt(), QStringLiteral( "CompoundCurveZM (CircularStringZM (5 8 11 14, 15 8 11 14, 15 18 21 24, 115 18 31 34, 5 8 11 14),(14 114 27 29, 24 125 37 39, 3 114 27 29))" ) );
+
+  // transform using class
+  QgsCompoundCurve transformCurve2;
+  TestTransformer transformer;
+  // no crash
+  QVERIFY( transformCurve2.transform( &transformer ) );
+  nodeLine.setPoints( QgsPointSequence()   << QgsPoint( 1, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 11, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 11, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 111, 12, 23, 24, QgsWkbTypes::PointZM )   << QgsPoint( 1, 2, 3, 4, QgsWkbTypes::PointZM ) );
+  transformCurve2.addCurve( nodeLine.clone() );
+  QVERIFY( transformCurve2.transform( &transformer ) );
+  QCOMPARE( transformCurve2.asWkt(), QStringLiteral( "CompoundCurveZM (CircularStringZM (3 16 8 3, 33 16 8 3, 33 26 18 13, 333 26 28 23, 3 16 8 3))" ) );
+  transformCurve2.addCurve( lsTransform.clone() );
+  QVERIFY( transformCurve2.transform( &transformer ) );
+  QCOMPARE( transformCurve2.asWkt(), QStringLiteral( "CompoundCurveZM (CircularStringZM (9 30 13 2, 99 30 13 2, 99 40 23 12, 999 40 33 22, 9 30 13 2),(36 125 28 23, 66 136 38 33, 3 125 28 23))" ) );
+
+  TestFailTransformer failTransformer;
+  QVERIFY( !transformCurve2.transform( &failTransformer ) );
 
   // substring
   QgsCompoundCurve substring;
@@ -15871,6 +15988,7 @@ void TestQgsGeometry::geometryCollection()
   QGSCOMPARENEAR( intR->boundingBox().xMaximum(), 6474984, 100 );
   QGSCOMPARENEAR( intR->boundingBox().yMaximum(), -3526584, 100 );
 
+#if PROJ_VERSION_MAJOR<6 // note - z value transform doesn't currently work with proj 6+, because we don't yet support compound CRS definitions
   //z value transform
   pTransform.transform( tr, QgsCoordinateTransform::ForwardTransform, true );
   extR = static_cast< const QgsLineString * >( pTransform.geometryN( 0 ) );
@@ -15894,6 +16012,7 @@ void TestQgsGeometry::geometryCollection()
   QGSCOMPARENEAR( intR->pointN( 1 ).z(), 3, 0.001 );
   QGSCOMPARENEAR( intR->pointN( 2 ).z(), 5, 0.001 );
   QGSCOMPARENEAR( intR->pointN( 3 ).z(), 1, 0.001 );
+#endif
 
   //QTransform transform
   QTransform qtr = QTransform::fromScale( 2, 3 );
@@ -16605,6 +16724,21 @@ void TestQgsGeometry::geometryCollection()
   transformCollect.transformVertices( transform );
   QCOMPARE( transformCollect.asWkt( 2 ), QStringLiteral( "GeometryCollection (LineStringZM (5 8 11 14, 15 18 21 24, 115 18 31 34),LineStringZM (13 5 9 11, 3.01 4.99 19 21, 13.02 5.01 29 31))" ) );
 
+  // transform using class
+  TestTransformer transformer;
+  QgsGeometryCollection transformCollect2;
+  transformCollect2.transform( &transformer ); // no crash
+  transformLine.setPoints( QgsPointSequence() << QgsPoint( 1, 2, 3, 4, QgsWkbTypes::PointZM ) << QgsPoint( 11, 12, 13, 14, QgsWkbTypes::PointZM ) << QgsPoint( 111, 12, 23, 24, QgsWkbTypes::PointZM ) );
+  transformCollect2.addGeometry( transformLine.clone() );
+  QVERIFY( transformCollect2.transform( &transformer ) );
+  QCOMPARE( transformCollect2.asWkt(), QStringLiteral( "GeometryCollection (LineStringZM (3 16 8 3, 33 26 18 13, 333 26 28 23))" ) );
+  transformLine.setPoints( QgsPointSequence() << QgsPoint( 11, 2, 5, 6, QgsWkbTypes::PointZM ) << QgsPoint( 1.01, 1.99, 15, 16, QgsWkbTypes::PointZM ) << QgsPoint( 11.02, 2.01, 25, 26, QgsWkbTypes::PointZM ) );
+  transformCollect2.addGeometry( transformLine.clone() );
+  QVERIFY( transformCollect2.transform( &transformer ) );
+  QCOMPARE( transformCollect2.asWkt( 2 ), QStringLiteral( "GeometryCollection (LineStringZM (9 30 13 2, 99 40 23 12, 999 40 33 22),LineStringZM (33 16 10 5, 3.03 15.99 20 15, 33.06 16.01 30 25))" ) );
+
+  TestFailTransformer failTransformer;
+  QVERIFY( !transformCollect2.transform( &failTransformer ) );
 }
 
 void TestQgsGeometry::fromQgsPointXY()
@@ -17638,31 +17772,33 @@ void TestQgsGeometry::makeValid()
   }
 }
 
+void TestQgsGeometry::isSimple_data()
+{
+  QTest::addColumn<QString>( "wkt" );
+  QTest::addColumn<bool>( "simple" );
+
+  QTest::newRow( "linestring" ) << QStringLiteral( "LINESTRING(0 0, 1 0, 1 1)" ) << true;
+  QTest::newRow( "may be closed (linear ring)" ) << QStringLiteral( "LINESTRING(0 0, 1 0, 1 1, 0 0)" ) << true;
+  QTest::newRow( "self-intersection" ) << QStringLiteral( "LINESTRING(0 0, 1 0, 1 1, 0 -1)" ) << false;
+  QTest::newRow( "self-tangency" ) << QStringLiteral( "LINESTRING(0 0, 1 0, 1 1, 0.5 0, 0 1)" ) << false;
+  QTest::newRow( "points are simple" ) << QStringLiteral( "POINT(1 1)" ) << true;
+  QTest::newRow( "multipoint" ) << QStringLiteral( "MULTIPOINT((1 1), (2 2))" ) << true;
+  QTest::newRow( "must not contain the same point twice" ) << QStringLiteral( "MULTIPOINT((1 1), (1 1))" ) << false;
+  QTest::newRow( "multiline string simple" ) << QStringLiteral( "MULTILINESTRING((0 0, 1 0), (0 1, 1 1))" ) << true;
+  QTest::newRow( "may be touching at endpoints" ) << QStringLiteral( "MULTILINESTRING((0 0, 1 0), (0 0, 1 0))" ) << true;
+  QTest::newRow( "must not intersect each other" ) << QStringLiteral( "MULTILINESTRING((0 0, 1 1), (0 1, 1 0))" ) << false;
+}
+
 void TestQgsGeometry::isSimple()
 {
-  typedef QPair<QString, bool> InputWktAndExpectedResult;
-  QList<InputWktAndExpectedResult> geoms;
-  geoms << qMakePair( QStringLiteral( "LINESTRING(0 0, 1 0, 1 1)" ), true );
-  geoms << qMakePair( QStringLiteral( "LINESTRING(0 0, 1 0, 1 1, 0 0)" ), true );  // may be closed (linear ring)
-  geoms << qMakePair( QStringLiteral( "LINESTRING(0 0, 1 0, 1 1, 0 -1)" ), false ); // self-intersection
-  geoms << qMakePair( QStringLiteral( "LINESTRING(0 0, 1 0, 1 1, 0.5 0, 0 1)" ), false ); // self-tangency
-  geoms << qMakePair( QStringLiteral( "POINT(1 1)" ), true ); // points are simple
-  geoms << qMakePair( QStringLiteral( "POLYGON((0 0, 1 1, 1 1, 0 0))" ), true ); // polygons are always simple, even if they are invalid
-  geoms << qMakePair( QStringLiteral( "MULTIPOINT((1 1), (2 2))" ), true );
-  geoms << qMakePair( QStringLiteral( "MULTIPOINT((1 1), (1 1))" ), false );  // must not contain the same point twice
-  geoms << qMakePair( QStringLiteral( "MULTILINESTRING((0 0, 1 0), (0 1, 1 1))" ), true );
-  geoms << qMakePair( QStringLiteral( "MULTILINESTRING((0 0, 1 0), (0 0, 1 0))" ), true );  // may be touching at endpoints
-  geoms << qMakePair( QStringLiteral( "MULTILINESTRING((0 0, 1 1), (0 1, 1 0))" ), false );  // must not intersect each other
-  geoms << qMakePair( QStringLiteral( "MULTIPOLYGON(((0 0, 1 1, 1 1, 0 0)),((0 0, 1 1, 1 1, 0 0)))" ), true ); // multi-polygons are always simple
+  QFETCH( QString, wkt );
+  QFETCH( bool, simple );
 
-  Q_FOREACH ( const InputWktAndExpectedResult &pair, geoms )
-  {
-    QgsGeometry gInput = QgsGeometry::fromWkt( pair.first );
-    QVERIFY( !gInput.isNull() );
+  QgsGeometry gInput = QgsGeometry::fromWkt( wkt );
+  QVERIFY( !gInput.isNull() );
 
-    bool res = gInput.isSimple();
-    QCOMPARE( res, pair.second );
-  }
+  bool res = gInput.isSimple();
+  QCOMPARE( res, simple );
 }
 
 void TestQgsGeometry::reshapeGeometryLineMerge()

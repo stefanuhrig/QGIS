@@ -33,6 +33,7 @@ Constructor for QgsVectorLayerFeatureSource.
 :param layer: source layer
 %End
 
+
     ~QgsVectorLayerFeatureSource();
 
     virtual QgsFeatureIterator getFeatures( const QgsFeatureRequest &request = QgsFeatureRequest() );
@@ -70,7 +71,8 @@ Returns the layer id of the source layer.
 
 
 
-
+  private:
+    QgsVectorLayerFeatureSource( const QgsVectorLayerFeatureSource &other );
 };
 
 
@@ -164,7 +166,7 @@ Setup the simplification of geometries to fetch using the specified simplify met
 class QgsVectorLayerSelectedFeatureSource : QgsFeatureSource, QgsExpressionContextScopeGenerator
 {
 %Docstring
-QgsFeatureSource subclass for the selected features from a :py:class:`QgsVectorLayer`.
+:py:class:`QgsFeatureSource` subclass for the selected features from a :py:class:`QgsVectorLayer`.
 
 .. versionadded:: 3.0
 %End
@@ -180,6 +182,7 @@ Constructor for QgsVectorLayerSelectedFeatureSource, for selected features from 
 The currently selected feature IDs are stored, so change to the layer selection after constructing
 the QgsVectorLayerSelectedFeatureSource will not be reflected.
 %End
+
 
     virtual QgsFeatureIterator getFeatures( const QgsFeatureRequest &request = QgsFeatureRequest() ) const;
 
@@ -198,6 +201,8 @@ the QgsVectorLayerSelectedFeatureSource will not be reflected.
     virtual SpatialIndexPresence hasSpatialIndex() const;
 
 
+  private:
+    QgsVectorLayerSelectedFeatureSource( const QgsVectorLayerSelectedFeatureSource &other );
 };
 
 

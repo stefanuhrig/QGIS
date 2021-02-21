@@ -2790,7 +2790,6 @@ void QgisApp::createActions()
   connect( mActionAddWcsLayer, &QAction::triggered, this, [ = ] { dataSourceManager( QStringLiteral( "wcs" ) ); } );
   connect( mActionAddWfsLayer, &QAction::triggered, this, [ = ] { dataSourceManager( QStringLiteral( "WFS" ) ); } );
   connect( mActionAddAfsLayer, &QAction::triggered, this, [ = ] { dataSourceManager( QStringLiteral( "arcgisfeatureserver" ) ); } );
-  connect( mActionAddAmsLayer, &QAction::triggered, this, [ = ] { dataSourceManager( QStringLiteral( "arcgismapserver" ) ); } );
   connect( mActionAddDelimitedText, &QAction::triggered, this, [ = ] { dataSourceManager( QStringLiteral( "delimitedtext" ) ); } );
   connect( mActionAddVirtualLayer, &QAction::triggered, this, [ = ] { dataSourceManager( QStringLiteral( "virtual" ) ); } );
   connect( mActionOpenTable, &QAction::triggered, this, [ = ]
@@ -3519,48 +3518,6 @@ void QgisApp::createToolBars()
   newLayerAction->setObjectName( QStringLiteral( "ActionNewLayer" ) );
   connect( bt, &QToolButton::triggered, this, &QgisApp::toolButtonActionTriggered );
 
-  // map service tool button
-  bt = new QToolButton();
-  bt->setPopupMode( QToolButton::MenuButtonPopup );
-  bt->addAction( mActionAddWmsLayer );
-  bt->addAction( mActionAddAmsLayer );
-  QAction *defMapServiceAction = mActionAddWmsLayer;
-  switch ( settings.value( QStringLiteral( "UI/defaultMapService" ), 0 ).toInt() )
-  {
-    case 0:
-      defMapServiceAction = mActionAddWmsLayer;
-      break;
-    case 1:
-      defMapServiceAction = mActionAddAmsLayer;
-      break;
-  }
-  bt->setDefaultAction( defMapServiceAction );
-  QAction *mapServiceAction = mLayerToolBar->insertWidget( mActionAddWmsLayer, bt );
-  mLayerToolBar->removeAction( mActionAddWmsLayer );
-  mapServiceAction->setObjectName( QStringLiteral( "ActionMapService" ) );
-  connect( bt, &QToolButton::triggered, this, &QgisApp::toolButtonActionTriggered );
-
-  // feature service tool button
-  bt = new QToolButton();
-  bt->setPopupMode( QToolButton::MenuButtonPopup );
-  bt->addAction( mActionAddWfsLayer );
-  bt->addAction( mActionAddAfsLayer );
-  QAction *defFeatureServiceAction = mActionAddWfsLayer;
-  switch ( settings.value( QStringLiteral( "UI/defaultFeatureService" ), 0 ).toInt() )
-  {
-    case 0:
-      defFeatureServiceAction = mActionAddWfsLayer;
-      break;
-    case 1:
-      defFeatureServiceAction = mActionAddAfsLayer;
-      break;
-  }
-  bt->setDefaultAction( defFeatureServiceAction );
-  QAction *featureServiceAction = mLayerToolBar->insertWidget( mActionAddWfsLayer, bt );
-  mLayerToolBar->removeAction( mActionAddWfsLayer );
-  featureServiceAction->setObjectName( QStringLiteral( "ActionFeatureService" ) );
-  connect( bt, &QToolButton::triggered, this, &QgisApp::toolButtonActionTriggered );
-
   // add db layer button
   bt = new QToolButton();
   bt->setPopupMode( QToolButton::MenuButtonPopup );
@@ -3595,7 +3552,7 @@ void QgisApp::createToolBars()
   }
   if ( defAddDbLayerAction )
     bt->setDefaultAction( defAddDbLayerAction );
-  QAction *addDbLayerAction = mLayerToolBar->insertWidget( mapServiceAction, bt );
+  QAction *addDbLayerAction = mLayerToolBar->insertWidget( mActionAddWmsLayer, bt );
   addDbLayerAction->setObjectName( QStringLiteral( "ActionAddDbLayer" ) );
   connect( bt, &QToolButton::triggered, this, &QgisApp::toolButtonActionTriggered );
 
@@ -4156,7 +4113,6 @@ void QgisApp::setTheme( const QString &themeName )
   mActionAddWcsLayer->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionAddWcsLayer.svg" ) ) );
   mActionAddWfsLayer->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionAddWfsLayer.svg" ) ) );
   mActionAddAfsLayer->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionAddAfsLayer.svg" ) ) );
-  mActionAddAmsLayer->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionAddAmsLayer.svg" ) ) );
   mActionAddToOverview->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionInOverview.svg" ) ) );
   mActionAnnotation->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionAnnotation.svg" ) ) );
   mActionFormAnnotation->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionFormAnnotation.svg" ) ) );
@@ -4266,9 +4222,10 @@ void QgisApp::setupConnections()
            this, &QgisApp::activateDeactivateLayerRelatedActions );
   connect( this, &QgisApp::activeLayerChanged,
            this, &QgisApp::setMapStyleDockLayer );
-
   connect( mLayerTreeView->selectionModel(), &QItemSelectionModel::selectionChanged,
            this, &QgisApp::legendLayerSelectionChanged );
+  connect( mLayerTreeView->selectionModel(), &QItemSelectionModel::selectionChanged,
+           this, &QgisApp::activateDeactivateMultipleLayersRelatedActions );
   connect( mLayerTreeView->layerTreeModel()->rootGroup(), &QgsLayerTreeNode::addedChildren,
            this, &QgisApp::markDirty );
   connect( mLayerTreeView->layerTreeModel()->rootGroup(), &QgsLayerTreeNode::addedChildren,
@@ -4476,16 +4433,16 @@ void QgisApp::createCanvasTools()
   mMapTools.mTrimExtendFeature = new QgsMapToolTrimExtendFeature( mMapCanvas );
   mMapTools.mTrimExtendFeature->setAction( mActionTrimExtendFeature );
 
-  mMapTools.mPinLabels = new QgsMapToolPinLabels( mMapCanvas );
+  mMapTools.mPinLabels = new QgsMapToolPinLabels( mMapCanvas, mAdvancedDigitizingDockWidget );
   mMapTools.mPinLabels->setAction( mActionPinLabels );
-  mMapTools.mShowHideLabels = new QgsMapToolShowHideLabels( mMapCanvas );
+  mMapTools.mShowHideLabels = new QgsMapToolShowHideLabels( mMapCanvas, mAdvancedDigitizingDockWidget );
   mMapTools.mShowHideLabels->setAction( mActionShowHideLabels );
-  mMapTools.mMoveLabel = new QgsMapToolMoveLabel( mMapCanvas );
+  mMapTools.mMoveLabel = new QgsMapToolMoveLabel( mMapCanvas, mAdvancedDigitizingDockWidget );
   mMapTools.mMoveLabel->setAction( mActionMoveLabel );
 
-  mMapTools.mRotateLabel = new QgsMapToolRotateLabel( mMapCanvas );
+  mMapTools.mRotateLabel = new QgsMapToolRotateLabel( mMapCanvas, mAdvancedDigitizingDockWidget );
   mMapTools.mRotateLabel->setAction( mActionRotateLabel );
-  mMapTools.mChangeLabelProperties = new QgsMapToolChangeLabelProperties( mMapCanvas );
+  mMapTools.mChangeLabelProperties = new QgsMapToolChangeLabelProperties( mMapCanvas, mAdvancedDigitizingDockWidget );
   mMapTools.mChangeLabelProperties->setAction( mActionChangeLabelProperties );
 //ensure that non edit tool is initialized or we will get crashes in some situations
   mNonEditMapTool = mMapTools.mPan;
@@ -6011,49 +5968,13 @@ QList< QgsMapLayer * > QgisApp::askUserForGDALSublayers( QgsRasterLayer *layer )
   layers.reserve( sublayers.size() );
   for ( int i = 0; i < sublayers.size(); i++ )
   {
-    // simplify raster sublayer name - should add a function in gdal provider for this?
-    // code is copied from QgsGdalLayerItem::createChildren
-    QString name = sublayers[i];
-    QString path = layer->source();
-    // if netcdf/hdf use all text after filename
-    // for hdf4 it would be best to get description, because the subdataset_index is not very practical
-    if ( name.startsWith( QLatin1String( "netcdf" ), Qt::CaseInsensitive ) ||
-         name.startsWith( QLatin1String( "hdf" ), Qt::CaseInsensitive ) )
-    {
-      name = name.mid( name.indexOf( path ) + path.length() + 1 );
-    }
-    else if ( name.startsWith( QLatin1String( "GPKG" ), Qt::CaseInsensitive ) )
-    {
-      const auto parts { name.split( ':' ) };
-      if ( parts.count() >= 3 )
-      {
-        name = parts.at( parts.count( ) - 1 );
-      }
-    }
-    else
-    {
-      // remove driver name and file name
-      name.remove( name.split( QgsDataProvider::sublayerSeparator() )[0] );
-      name.remove( path );
-    }
-    // remove any : or " left over
-    if ( name.startsWith( ':' ) )
-      name.remove( 0, 1 );
-
-    if ( name.startsWith( '\"' ) )
-      name.remove( 0, 1 );
-
-    if ( name.endsWith( ':' ) )
-      name.chop( 1 );
-
-    if ( name.endsWith( '\"' ) )
-      name.chop( 1 );
-
-    names << name;
+    const QStringList parts = sublayers[i].split( QgsDataProvider::sublayerSeparator() );
+    const QString desc = parts[1];
+    names << desc;
 
     QgsSublayersDialog::LayerDefinition def;
     def.layerId = i;
-    def.layerName = name;
+    def.layerName = desc;
     layers << def;
   }
 
@@ -6063,7 +5984,6 @@ QList< QgsMapLayer * > QgisApp::askUserForGDALSublayers( QgsRasterLayer *layer )
   {
     // create more informative layer names, containing filename as well as sublayer name
     QRegExp rx( "\"(.*)\"" );
-    QString uri, name;
 
     QgsLayerTreeGroup *group = nullptr;
     bool addToGroup = settings.value( QStringLiteral( "/qgis/openSublayersInGroup" ), true ).toBool();
@@ -6077,10 +5997,13 @@ QList< QgsMapLayer * > QgisApp::askUserForGDALSublayers( QgsRasterLayer *layer )
     for ( const QgsSublayersDialog::LayerDefinition &def : constSelection )
     {
       int i = def.layerId;
-      if ( rx.indexIn( sublayers[i] ) != -1 )
+
+      const QStringList parts = sublayers[i].split( QgsDataProvider::sublayerSeparator() );
+      const QString path = parts[0];
+      QString name = path;
+      if ( rx.indexIn( name ) != -1 )
       {
-        uri = rx.cap( 1 );
-        name = sublayers[i];
+        const QString uri = rx.cap( 1 );
         name.replace( uri, QFileInfo( uri ).completeBaseName() );
       }
       else
@@ -6088,7 +6011,7 @@ QList< QgsMapLayer * > QgisApp::askUserForGDALSublayers( QgsRasterLayer *layer )
         name = names[i];
       }
 
-      QgsRasterLayer *rlayer = new QgsRasterLayer( sublayers[i], name );
+      QgsRasterLayer *rlayer = new QgsRasterLayer( path, name );
       if ( rlayer && rlayer->isValid() )
       {
         if ( addToGroup )
@@ -6236,6 +6159,11 @@ QList<QgsMapLayer *> QgisApp::askUserForOGRSublayers( QgsVectorLayer *&parentLay
   QString fileName = QFileInfo( uri ).baseName();
   const auto constSelection = chooseSublayersDialog.selection();
   const QString providerType = parentLayer->providerType();
+
+  if ( name.isEmpty() )
+  {
+    name = fileName;
+  }
 
   // We delete the parent layer now, to be sure in the GeoPackage case that
   // when several sublayers are selected, they will use the same GDAL dataset
@@ -10108,17 +10036,29 @@ void QgisApp::modifyAttributesOfSelectedFeatures()
     return;
   }
 
-  //dummy feature
-  QgsFeature f( vl->fields() );
   QgsAttributeEditorContext context( createAttributeEditorContext() );
   context.setAllowCustomUi( false );
   context.setVectorLayerTools( mVectorLayerTools );
   context.setCadDockWidget( mAdvancedDigitizingDockWidget );
   context.setMapCanvas( mMapCanvas );
-  context.setAttributeFormMode( QgsAttributeEditorContext::Mode::MultiEditMode );
 
-  QgsAttributeDialog *dialog = new QgsAttributeDialog( vl, &f, false, this, true, context );
-  dialog->setMode( QgsAttributeEditorContext::MultiEditMode );
+  QgsAttributeDialog *dialog = nullptr;
+  if ( vl->selectedFeatureCount() == 1 )
+  {
+    context.setAttributeFormMode( QgsAttributeEditorContext::Mode::SingleEditMode );
+    QgsFeature f = vl->selectedFeatures().at( 0 );
+    dialog = new QgsAttributeDialog( vl, &f, false, this, true, context );
+    dialog->setMode( QgsAttributeEditorContext::SingleEditMode );
+  }
+  else
+  {
+    context.setAttributeFormMode( QgsAttributeEditorContext::Mode::MultiEditMode );
+
+    //dummy feature
+    QgsFeature f( vl->fields() );
+    dialog = new QgsAttributeDialog( vl, &f, false, this, true, context );
+    dialog->setMode( QgsAttributeEditorContext::MultiEditMode );
+  }
   dialog->setAttribute( Qt::WA_DeleteOnClose );
   dialog->show();
 }
@@ -14537,6 +14477,8 @@ void QgisApp::selectionChanged( QgsMapLayer *layer )
   {
     activateDeactivateLayerRelatedActions( layer );
   }
+
+  activateDeactivateMultipleLayersRelatedActions();
 }
 
 void QgisApp::legendLayerSelectionChanged()
@@ -14616,6 +14558,61 @@ void QgisApp::updateLabelToolButtons()
   mActionMoveLabel->setEnabled( enableMove );
   mActionRotateLabel->setEnabled( enableRotate );
   mActionChangeLabelProperties->setEnabled( enableChange );
+}
+
+bool QgisApp::selectedLayersHaveSelection()
+{
+  const QList<QgsMapLayer *> layers = mLayerTreeView->selectedLayers();
+
+  // If no selected layers, use active layer
+  if ( layers.empty() && activeLayer() )
+  {
+    if ( QgsVectorLayer *layer = qobject_cast<QgsVectorLayer *>( activeLayer() ) )
+      return layer->selectedFeatureCount() > 0;
+  }
+
+  for ( QgsMapLayer *mapLayer : layers )
+  {
+    QgsVectorLayer *layer = qobject_cast<QgsVectorLayer *>( mapLayer );
+
+    if ( !layer || !layer->isSpatial() || layer->selectedFeatureCount() == 0 )
+      continue;
+
+    return true;
+  }
+
+  return false;
+}
+
+bool QgisApp::selectedLayersHaveSpatial()
+{
+  const QList<QgsMapLayer *> layers = mLayerTreeView->selectedLayers();
+
+  // If no selected layers, use active layer
+  if ( layers.empty() && activeLayer() )
+    return activeLayer()->isSpatial();
+
+  for ( QgsMapLayer *mapLayer : layers )
+  {
+    if ( !mapLayer || !mapLayer->isSpatial() )
+      continue;
+
+    return true;
+  }
+
+  return false;
+}
+
+void QgisApp::activateDeactivateMultipleLayersRelatedActions()
+{
+  // these actions are enabled whenever ANY selected layer is spatial
+  const bool hasSpatial = selectedLayersHaveSpatial();
+  mActionZoomToLayers->setEnabled( hasSpatial );
+  mActionPanToSelected->setEnabled( hasSpatial );
+
+  // this action is enabled whenever ANY selected layer has a selection
+  const bool hasSelection = selectedLayersHaveSelection();
+  mActionZoomToSelected->setEnabled( hasSelection );
 }
 
 void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer *layer )
@@ -14797,8 +14794,6 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer *layer )
       mActionDecreaseGamma->setEnabled( false );
       mActionZoomActualSize->setEnabled( false );
       mActionZoomToLayer->setEnabled( isSpatial );
-      mActionZoomToLayers->setEnabled( isSpatial );
-      mActionZoomToSelected->setEnabled( isSpatial );
       mActionLabeling->setEnabled( isSpatial );
       mActionDiagramProperties->setEnabled( isSpatial );
       mActionReverseLine->setEnabled( false );
@@ -15053,8 +15048,6 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer *layer )
       mActionSelectRadius->setEnabled( false );
       mActionZoomActualSize->setEnabled( true );
       mActionZoomToLayer->setEnabled( true );
-      mActionZoomToLayers->setEnabled( true );
-      mActionZoomToSelected->setEnabled( false );
       mActionOpenTable->setEnabled( false );
       mActionSelectAll->setEnabled( false );
       mActionReselect->setEnabled( false );
@@ -15166,8 +15159,6 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer *layer )
       mActionSelectRadius->setEnabled( false );
       mActionZoomActualSize->setEnabled( false );
       mActionZoomToLayer->setEnabled( true );
-      mActionZoomToLayers->setEnabled( true );
-      mActionZoomToSelected->setEnabled( false );
       mActionOpenTable->setEnabled( false );
       mActionSelectAll->setEnabled( false );
       mActionReselect->setEnabled( false );
@@ -15233,8 +15224,6 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer *layer )
       mActionSelectRadius->setEnabled( false );
       mActionZoomActualSize->setEnabled( false );
       mActionZoomToLayer->setEnabled( true );
-      mActionZoomToLayers->setEnabled( true );
-      mActionZoomToSelected->setEnabled( false );
       mActionOpenTable->setEnabled( false );
       mActionSelectAll->setEnabled( false );
       mActionReselect->setEnabled( false );
@@ -15300,8 +15289,6 @@ void QgisApp::activateDeactivateLayerRelatedActions( QgsMapLayer *layer )
       mActionSelectRadius->setEnabled( false );
       mActionZoomActualSize->setEnabled( false );
       mActionZoomToLayer->setEnabled( true );
-      mActionZoomToLayers->setEnabled( true );
-      mActionZoomToSelected->setEnabled( false );
       mActionOpenTable->setEnabled( false );
       mActionSelectAll->setEnabled( false );
       mActionReselect->setEnabled( false );
@@ -16243,6 +16230,12 @@ void QgisApp::showLayerProperties( QgsMapLayer *mapLayer, const QString &page )
     case QgsMapLayerType::RasterLayer:
     {
       QgsRasterLayerProperties *rasterLayerPropertiesDialog = new QgsRasterLayerProperties( mapLayer, mMapCanvas, this );
+
+      for ( QgsMapLayerConfigWidgetFactory *factory : qgis::as_const( mMapLayerPanelFactories ) )
+      {
+        rasterLayerPropertiesDialog->addPropertiesPageFactory( factory );
+      }
+
       if ( !page.isEmpty() )
         rasterLayerPropertiesDialog->setCurrentPage( page );
 
@@ -16588,14 +16581,6 @@ void QgisApp::toolButtonActionTriggered( QAction *action )
     settings.setValue( QStringLiteral( "UI/defaultAddDbLayerAction" ), 3 );
   else if ( mActionAddHanaLayer && action == mActionAddHanaLayer )
     settings.setValue( QStringLiteral( "UI/defaultAddDbLayerAction" ), 4 );
-  else if ( action == mActionAddWfsLayer )
-    settings.setValue( QStringLiteral( "UI/defaultFeatureService" ), 0 );
-  else if ( action == mActionAddAfsLayer )
-    settings.setValue( QStringLiteral( "UI/defaultFeatureService" ), 1 );
-  else if ( action == mActionAddWmsLayer )
-    settings.setValue( QStringLiteral( "UI/defaultMapService" ), 0 );
-  else if ( action == mActionAddAmsLayer )
-    settings.setValue( QStringLiteral( "UI/defaultMapService" ), 1 );
   else if ( action == mActionMoveFeature )
     settings.setValue( QStringLiteral( "UI/defaultMoveTool" ), 0 );
   else if ( action == mActionMoveFeatureCopy )

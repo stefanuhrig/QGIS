@@ -84,6 +84,8 @@ Creates a new QgsSimpleLineSymbolLayer from an SLD XML DOM ``element``.
 
     virtual QColor dxfColor( QgsSymbolRenderContext &context ) const;
 
+    virtual bool canCauseArtifactsBetweenAdjacentTiles() const;
+
 
     Qt::PenStyle penStyle() const;
 %Docstring
@@ -660,6 +662,8 @@ calculating individual symbol angles.
 
     virtual QVariantMap properties() const;
 
+    virtual bool canCauseArtifactsBetweenAdjacentTiles() const;
+
 
   protected:
 
@@ -788,7 +792,7 @@ Shall the marker be rotated.
 :return: ``True`` if the marker should be rotated.
 
 .. deprecated::
-   Use rotateSymbols() instead.
+   Use :py:func:`~QgsMarkerLineSymbolLayer.rotateSymbols` instead.
 %End
 
  void setRotateMarker( bool rotate ) /Deprecated/;
@@ -796,7 +800,7 @@ Shall the marker be rotated.
 Shall the marker be rotated.
 
 .. deprecated::
-   Use setRotateSymbols() instead.
+   Use :py:func:`~QgsMarkerLineSymbolLayer.setRotateSymbols` instead.
 %End
 
     virtual void renderPolyline( const QPolygonF &points, QgsSymbolRenderContext &context );

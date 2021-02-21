@@ -298,12 +298,36 @@ class CORE_EXPORT QgsVectorLayerUtils
     static QgsFeatureList makeFeaturesCompatible( const QgsFeatureList &features, const QgsVectorLayer *layer, QgsFeatureSink::SinkFlags sinkFlags = QgsFeatureSink::SinkFlags() );
 
     /**
-     * \return TRUE if the \param feature field at index \param fieldIndex from \param layer
-     * is editable, FALSE if the field is readonly
+     * Tests whether a field is editable for a particular \a feature.
+     *
+     * \returns TRUE if the field at index \a fieldIndex from \a layer
+     * is editable, FALSE if the field is read only.
      *
      * \since QGIS 3.10
      */
     static bool fieldIsEditable( const QgsVectorLayer *layer, int fieldIndex, const QgsFeature &feature );
+
+    /**
+     * \returns TRUE if the field at index \a fieldIndex from \a layer
+     * is editable, FALSE if the field is read only.
+     *
+     * If this function returns TRUE then the editability of the field may still vary feature by
+     * feature. See fieldIsEditable() to determine this on a feature by feature basis.
+     *
+     * \since QGIS 3.18
+     */
+    static bool fieldIsReadOnly( const QgsVectorLayer *layer, int fieldIndex );
+
+    /**
+     * Returns TRUE if the editability of the field at index \a fieldIndex from \a layer may vary
+     * feature by feature.
+     *
+     * I.e. if the field is taken from a joined layer, the value may or may not be editable for any individual
+     * feature depending on the join's "upsert on edit" capabilities.
+     *
+     * \since QGIS 3.18
+     */
+    static bool fieldEditabilityDependsOnFeature( const QgsVectorLayer *layer, int fieldIndex );
 
     /**
       * Returns masks defined in labeling options of a layer.
@@ -348,6 +372,19 @@ class CORE_EXPORT QgsVectorLayerUtils
      * \since QGIS 3.14
      */
     static bool impactsCascadeFeatures( const QgsVectorLayer *layer, const QgsFeatureIds &fids, const QgsProject *project, QgsDuplicateFeatureContext &context SIP_OUT, QgsVectorLayerUtils::CascadedFeatureFlags flags = QgsVectorLayerUtils::CascadedFeatureFlags() );
+
+    /**
+     * Given a set of \a fields, attempts to pick the "most useful" field
+     * for user-friendly identification of features.
+     *
+     * For instance, if a field called "name" is present, this will be returned.
+     *
+     * Assumes that the user has organized the data with the more "interesting" field
+     * names first. As such, "name" would be selected before "oldname", "othername", etc.
+     *
+     * \since QGIS 3.18
+     */
+    static QString guessFriendlyIdentifierField( const QgsFields &fields );
 
 };
 

@@ -802,6 +802,26 @@ static GDALRIOResampleAlg getGDALResamplingAlg( QgsGdalProvider::ResamplingMetho
     case QgsGdalProvider::ResamplingMethod::Cubic:
       eResampleAlg = GRIORA_Cubic;
       break;
+
+    case QgsRasterDataProvider::ResamplingMethod::CubicSpline:
+      eResampleAlg = GRIORA_CubicSpline;
+      break;
+
+    case QgsRasterDataProvider::ResamplingMethod::Lanczos:
+      eResampleAlg = GRIORA_Lanczos;
+      break;
+
+    case QgsRasterDataProvider::ResamplingMethod::Average:
+      eResampleAlg = GRIORA_Average;
+      break;
+
+    case QgsRasterDataProvider::ResamplingMethod::Mode:
+      eResampleAlg = GRIORA_Mode;
+      break;
+
+    case QgsRasterDataProvider::ResamplingMethod::Gauss:
+      eResampleAlg = GRIORA_Gauss;
+      break;
   }
 
   return eResampleAlg;
@@ -1661,13 +1681,21 @@ QStringList QgsGdalProvider::subLayers( GDALDatasetH dataset )
 
   if ( metadata )
   {
-    for ( int i = 0; metadata[i]; i++ )
+    const int subdatasetCount = CSLCount( metadata ) / 2;
+    for ( int i = 1; i <= subdatasetCount; i++ )
     {
-      QString layer = QString::fromUtf8( metadata[i] );
-      int pos = layer.indexOf( QLatin1String( "_NAME=" ) );
-      if ( pos >= 0 )
+      const char *name = CSLFetchNameValue( metadata, CPLSPrintf( "SUBDATASET_%d_NAME", i ) );
+      const char *desc = CSLFetchNameValue( metadata, CPLSPrintf( "SUBDATASET_%d_DESC", i ) );
+      if ( name && desc )
       {
-        subLayers << layer.mid( pos + 6 );
+        // For GeoPackage, desc is often "table - identifier" where table=identifier
+        // In that case, just keep one.
+        const char *sepPtr = strstr( desc, " - " );
+        if ( sepPtr && strncmp( desc, sepPtr + 3, strlen( sepPtr + 3 ) ) == 0 )
+        {
+          desc = sepPtr + 3;
+        }
+        subLayers << QString::fromUtf8( name ) + QgsDataProvider::sublayerSeparator() + QString::fromUtf8( desc );
       }
     }
   }
@@ -1971,12 +1999,12 @@ QString QgsGdalProvider::buildPyramids( const QList<QgsRasterPyramid> &rasterPyr
       GDALClose( mGdalDataset );
       //mGdalBaseDataset = GDALOpen( QFile::encodeName( dataSourceUri() ).constData(), GA_Update );
 
-      mGdalBaseDataset = gdalOpen( dataSourceUri( true ).toUtf8().constData(), GA_Update );
+      mGdalBaseDataset = gdalOpen( dataSourceUri( true ), GDAL_OF_UPDATE );
 
       // if the dataset couldn't be opened in read / write mode, tell the user
       if ( !mGdalBaseDataset )
       {
-        mGdalBaseDataset = gdalOpen( dataSourceUri( true ).toUtf8().constData(), GA_ReadOnly );
+        mGdalBaseDataset = gdalOpen( dataSourceUri( true ), GDAL_OF_READONLY );
         //Since we are not a virtual warped dataset, mGdalDataSet and mGdalBaseDataset are supposed to be the same
         mGdalDataset = mGdalBaseDataset;
         return QStringLiteral( "ERROR_WRITE_FORMAT" );
@@ -2085,7 +2113,7 @@ QString QgsGdalProvider::buildPyramids( const QList<QgsRasterPyramid> &rasterPyr
       //something bad happenend
       //QString myString = QString (CPLGetLastError());
       GDALClose( mGdalBaseDataset );
-      mGdalBaseDataset = gdalOpen( dataSourceUri( true ).toUtf8().constData(), mUpdate ? GA_Update : GA_ReadOnly );
+      mGdalBaseDataset = gdalOpen( dataSourceUri( true ), mUpdate ? GDAL_OF_UPDATE : GDAL_OF_READONLY );
       //Since we are not a virtual warped dataset, mGdalDataSet and mGdalBaseDataset are supposed to be the same
       mGdalDataset = mGdalBaseDataset;
 
@@ -2137,7 +2165,7 @@ QString QgsGdalProvider::buildPyramids( const QList<QgsRasterPyramid> &rasterPyr
     QgsDebugMsgLevel( QStringLiteral( "Reopening dataset ..." ), 2 );
     //close the gdal dataset and reopen it in read only mode
     GDALClose( mGdalBaseDataset );
-    mGdalBaseDataset = gdalOpen( dataSourceUri( true ).toUtf8().constData(), mUpdate ? GA_Update : GA_ReadOnly );
+    mGdalBaseDataset = gdalOpen( dataSourceUri( true ), mUpdate ? GDAL_OF_UPDATE : GDAL_OF_READONLY );
     //Since we are not a virtual warped dataset, mGdalDataSet and mGdalBaseDataset are supposed to be the same
     mGdalDataset = mGdalBaseDataset;
   }
@@ -2322,40 +2350,12 @@ QStringList QgsGdalProvider::subLayers() const
 
 QVariantMap QgsGdalProviderMetadata::decodeUri( const QString &uri ) const
 {
-  QString path = uri;
-  QString layerName;
-
-  QString vsiPrefix = qgsVsiPrefix( path );
-  if ( !path.isEmpty() )
-    path = path.mid( vsiPrefix.count() );
-
-  if ( path.indexOf( ':' ) != -1 )
-  {
-    QStringList parts = path.split( ':' );
-    if ( parts[0].toLower() == QLatin1String( "gpkg" ) )
-    {
-      parts.removeFirst();
-      // Handle windows paths - which has an extra colon - and unix paths
-      if ( ( parts[0].length() > 1 && parts.count() > 1 ) || parts.count() > 2 )
-      {
-        layerName = parts[parts.length() - 1];
-        parts.removeLast();
-      }
-      path  = parts.join( ':' );
-    }
-  }
-
-  QVariantMap uriComponents;
-  uriComponents.insert( QStringLiteral( "path" ), path );
-  uriComponents.insert( QStringLiteral( "layerName" ), layerName );
-  return uriComponents;
+  return QgsGdalProviderBase::decodeGdalUri( uri );
 }
 
 QString QgsGdalProviderMetadata::encodeUri( const QVariantMap &parts ) const
 {
-  QString path = parts.value( QStringLiteral( "path" ) ).toString();
-  QString layerName = parts.value( QStringLiteral( "layerName" ) ).toString();
-  return path + ( !layerName.isEmpty() ? QStringLiteral( "|%1" ).arg( layerName ) : QString() );
+  return  QgsGdalProviderBase::encodeGdalUri( parts );
 }
 
 bool QgsGdalProviderMetadata::uriIsBlocklisted( const QString &uri ) const
@@ -2379,7 +2379,8 @@ bool QgsGdalProviderMetadata::uriIsBlocklisted( const QString &uri ) const
 
 QgsGdalProvider *QgsGdalProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags )
 {
-  return new QgsGdalProvider( uri, options, flags );
+  Q_UNUSED( flags );
+  return new QgsGdalProvider( uri, options );
 }
 
 /**
@@ -2608,7 +2609,7 @@ bool QgsGdalProvider::isValidRasterFileName( QString const &fileNameQString, QSt
 
   //open the file using gdal making sure we have handled locale properly
   //myDataset = GDALOpen( QFile::encodeName( fileNameQString ).constData(), GA_ReadOnly );
-  myDataset.reset( QgsGdalProviderBase::gdalOpen( fileName.toUtf8().constData(), GA_ReadOnly ) );
+  myDataset.reset( QgsGdalProviderBase::gdalOpen( fileName, GDAL_OF_READONLY ) );
   if ( !myDataset )
   {
     if ( CPLGetLastErrorNo() != CPLE_OpenFailed )
@@ -2881,6 +2882,10 @@ QgsRasterBandStats QgsGdalProvider::bandStatistics( int bandNo, int stats, const
     QgsDebugMsgLevel( QStringLiteral( "STDDEV %1" ).arg( myRasterBandStats.stdDev ), 2 );
 #endif
   }
+  else
+  {
+    myRasterBandStats.statsGathered = QgsRasterBandStats::Stats::None;
+  }
 
   mStatistics.append( myRasterBandStats );
   return myRasterBandStats;
@@ -2908,7 +2913,7 @@ bool QgsGdalProvider::initIfNeeded()
   gdalUri = dataSourceUri( true );
 
   CPLErrorReset();
-  mGdalBaseDataset = gdalOpen( gdalUri.toUtf8().constData(), mUpdate ? GA_Update : GA_ReadOnly );
+  mGdalBaseDataset = gdalOpen( gdalUri, mUpdate ? GDAL_OF_UPDATE : GDAL_OF_READONLY );
 
   if ( !mGdalBaseDataset )
   {
@@ -3503,7 +3508,7 @@ bool QgsGdalProvider::setEditable( bool enabled )
   mUpdate = enabled;
 
   // reopen the dataset
-  mGdalBaseDataset = gdalOpen( dataSourceUri( true ).toUtf8().constData(), mUpdate ? GA_Update : GA_ReadOnly );
+  mGdalBaseDataset = gdalOpen( dataSourceUri( true ), mUpdate ? GDAL_OF_UPDATE : GDAL_OF_READONLY );
   if ( !mGdalBaseDataset )
   {
     QString msg = QStringLiteral( "Cannot reopen GDAL dataset %1:\n%2" ).arg( dataSourceUri(), QString::fromUtf8( CPLGetLastErrorMsg() ) );

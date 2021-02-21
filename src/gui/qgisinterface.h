@@ -72,7 +72,7 @@ class QgsAbstractMapToolHandler;
 
 /**
  * \ingroup gui
- * QgisInterface
+ * \brief QgisInterface
  * Abstract base class defining interfaces exposed by QgisApp and
  * made available to plugins.
  *
@@ -531,10 +531,12 @@ class GUI_EXPORT QgisInterface : public QObject
      */
     virtual QAction *actionAddPointCloudLayer() = 0;
 
-    //! Returns the native Add ArcGIS FeatureServer action.
+    //! Returns the native Add ArcGIS REST Server action.
     virtual QAction *actionAddAfsLayer() = 0;
-    //! Returns the native Add ArcGIS MapServer action.
+
+    //! Returns the native Add ArcGIS REST Server action.
     virtual QAction *actionAddAmsLayer() = 0;
+
     virtual QAction *actionCopyLayerStyle() = 0;
     virtual QAction *actionPasteLayerStyle() = 0;
     virtual QAction *actionOpenTable() = 0;

@@ -143,6 +143,8 @@ QList<QgsMapToolIdentify::IdentifyResult> QgsMapToolIdentify::identify( const Qg
       emit identifyMessage( tr( "No active layer. To identify features, you must choose an active layer." ) );
       return results;
     }
+    if ( !layer->flags().testFlag( QgsMapLayer::Identifiable ) )
+      return results;
 
     QApplication::setOverrideCursor( Qt::WaitCursor );
 
@@ -1232,7 +1234,7 @@ bool QgsMapToolIdentify::identifyRasterLayer( QList<IdentifyResult> *results, Qg
         }
 
         // list of feature stores for a single sublayer
-        const QgsFeatureStoreList featureStoreList = it.value().value<QgsFeatureStoreList>();
+        const QgsFeatureStoreList featureStoreList = value.value<QgsFeatureStoreList>();
 
         for ( const QgsFeatureStore &featureStore : featureStoreList )
         {

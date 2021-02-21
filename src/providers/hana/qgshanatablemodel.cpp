@@ -95,7 +95,7 @@ void QgsHanaTableModel::addTableEntry( const QString &connName, const QgsHanaLay
     if ( !pkColumnsStored.empty() )
     {
       // We check whether the primary key columns still exist.
-      auto intersection = pkColumnsStored.toSet().intersect( layerProperty.pkCols.toSet() );
+      auto intersection = qgis::listToSet( pkColumnsStored ).intersect( qgis::listToSet( layerProperty.pkCols ) );
       if ( intersection.size() == pkColumnsStored.size() )
         pkColumns = pkColumnsStored;
     }
@@ -322,10 +322,11 @@ QString QgsHanaTableModel::layerURI( const QModelIndex &index, const QString &co
   QString tableName = index.sibling( index.row(), DbtmTable ).data( Qt::DisplayRole ).toString();
 
   QgsHanaSettings settings( connName, true );
-  settings.setKeyColumns( schemaName, tableName, pkColumnsSelected.toList() );
+  settings.setKeyColumns( schemaName, tableName, qgis::setToList( pkColumnsSelected ) );
   settings.save();
 
   QStringList pkColumns;
+  pkColumns.reserve( pkColumnsSelected.size() );
   for ( const QString &column : pkColumnsSelected )
     pkColumns <<  QgsHanaUtils::quotedIdentifier( column );
 
