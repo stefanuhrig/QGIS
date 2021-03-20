@@ -31,9 +31,13 @@
 
 QgsRectangle QgsServerApiUtils::parseBbox( const QString &bbox )
 {
-  const auto parts { bbox.split( ',', QString::SplitBehavior::SkipEmptyParts ) };
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
+  const QStringList parts { bbox.split( ',', QString::SplitBehavior::SkipEmptyParts ) };
+#else
+  const QStringList parts { bbox.split( ',', Qt::SplitBehaviorFlags::SkipEmptyParts ) };
+#endif
   // Note: Z is ignored
-  auto ok { true };
+  bool ok { true };
   if ( parts.count() == 4 ||  parts.count() == 6 )
   {
     const auto hasZ { parts.count() == 6 };
@@ -280,7 +284,7 @@ QgsExpression QgsServerApiUtils::temporalFilterExpression( const QgsVectorLayer 
     {
       QgsDateRange dateInterval { QgsServerApiUtils::parseTemporalDateInterval( interval ) };
 
-      for ( const auto &dimension : qgis::as_const( dimensions ) )
+      for ( const auto &dimension : std::as_const( dimensions ) )
       {
 
         // Determine the field type from the dimension name "time"/"date"
@@ -316,7 +320,7 @@ QgsExpression QgsServerApiUtils::temporalFilterExpression( const QgsVectorLayer 
     else // try datetime
     {
       QgsDateTimeRange dateTimeInterval { QgsServerApiUtils::parseTemporalDateTimeInterval( interval ) };
-      for ( const auto &dimension : qgis::as_const( dimensions ) )
+      for ( const auto &dimension : std::as_const( dimensions ) )
       {
 
         // Determine the field type from the dimension name "time"/"date"
@@ -365,7 +369,7 @@ QgsExpression QgsServerApiUtils::temporalFilterExpression( const QgsVectorLayer 
   else // single value
   {
 
-    for ( const auto &dimension : qgis::as_const( dimensions ) )
+    for ( const auto &dimension : std::as_const( dimensions ) )
     {
       // Determine the field type from the dimension name "time"/"date"
       const bool fieldIsDateTime { dimension.name.toLower() == QLatin1String( "time" ) };

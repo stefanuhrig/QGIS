@@ -217,7 +217,7 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer *lyr, QgsMapCanv
 
   if ( mMapCanvas )
   {
-    mPixelSelectorTool = qgis::make_unique<QgsMapToolEmitPoint>( canvas );
+    mPixelSelectorTool = std::make_unique<QgsMapToolEmitPoint>( canvas );
     connect( mPixelSelectorTool.get(), &QgsMapToolEmitPoint::canvasClicked, this, &QgsRasterLayerProperties::pixelSelected );
     connect( mPixelSelectorTool.get(), &QgsMapToolEmitPoint::deactivated, this, &QgsRasterLayerProperties::restoreWindowModality );
   }
@@ -486,11 +486,7 @@ QgsRasterLayerProperties::QgsRasterLayerProperties( QgsMapLayer *lyr, QgsMapCanv
 #ifdef WITH_QTWEBKIT
   // Setup information tab
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-  const int horizontalDpi = qApp->desktop()->screen()->logicalDpiX();
-#else
   const int horizontalDpi = logicalDpiX();
-#endif
 
   // Adjust zoom: text is ok, but HTML seems rather big at least on Linux/KDE
   if ( horizontalDpi > 96 )
@@ -949,7 +945,7 @@ void QgsRasterLayerProperties::sync()
 
   mTemporalWidget->syncToLayer();
 
-  for ( QgsMapLayerConfigWidget *page : qgis::as_const( mLayerPropertiesPages ) )
+  for ( QgsMapLayerConfigWidget *page : std::as_const( mLayerPropertiesPages ) )
   {
     page->syncToLayer( mRasterLayer );
   }
@@ -1902,7 +1898,11 @@ void QgsRasterLayerProperties::pbnImportTransparentPixelValues_clicked()
         {
           if ( !myInputLine.simplified().startsWith( '#' ) )
           {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
             QStringList myTokens = myInputLine.split( QRegExp( "\\s+" ), QString::SkipEmptyParts );
+#else
+            QStringList myTokens = myInputLine.split( QRegExp( "\\s+" ), Qt::SkipEmptyParts );
+#endif
             if ( myTokens.count() != 4 )
             {
               myImportError = true;
@@ -1935,7 +1935,11 @@ void QgsRasterLayerProperties::pbnImportTransparentPixelValues_clicked()
         {
           if ( !myInputLine.simplified().startsWith( '#' ) )
           {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
             QStringList myTokens = myInputLine.split( QRegExp( "\\s+" ), QString::SkipEmptyParts );
+#else
+            QStringList myTokens = myInputLine.split( QRegExp( "\\s+" ), Qt::SkipEmptyParts );
+#endif
             if ( myTokens.count() != 3 && myTokens.count() != 2 ) // 2 for QGIS < 1.9 compatibility
             {
               myImportError = true;

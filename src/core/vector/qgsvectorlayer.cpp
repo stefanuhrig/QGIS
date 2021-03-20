@@ -36,6 +36,8 @@
 #include <QStringBuilder>
 #include <QUrl>
 #include <QUndoCommand>
+#include <QUrlQuery>
+#include <QUuid>
 
 #include "qgssettings.h"
 #include "qgsvectorlayer.h"
@@ -54,6 +56,7 @@
 #include "qgsfeature.h"
 #include "qgsfeaturerequest.h"
 #include "qgsfields.h"
+#include "qgsmaplayerfactory.h"
 #include "qgsgeometry.h"
 #include "qgslayermetadataformatter.h"
 #include "qgslogger.h"
@@ -165,7 +168,7 @@ QgsVectorLayer::QgsVectorLayer( const QString &vectorLayerPath,
 
   setProviderType( providerKey );
 
-  mGeometryOptions = qgis::make_unique<QgsGeometryOptions>();
+  mGeometryOptions = std::make_unique<QgsGeometryOptions>();
   mActions = new QgsActionManager( this );
   mConditionalStyles = new QgsConditionalLayerStyles( this );
   mStoredExpressionManager = new QgsStoredExpressionManager();
@@ -183,7 +186,7 @@ QgsVectorLayer::QgsVectorLayer( const QString &vectorLayerPath,
     setDataSource( vectorLayerPath, baseName, providerKey, providerOptions, options.loadDefaultStyle );
   }
 
-  for ( const QgsField &field : qgis::as_const( mFields ) )
+  for ( const QgsField &field : std::as_const( mFields ) )
   {
     mAttributeAliasMap.insert( field.name(), QString() );
   }
@@ -824,7 +827,7 @@ void QgsVectorLayer::updateDefaultValues( QgsFeatureId fid, QgsFeature feature )
       feature = getFeature( fid );
 
     int size = mFields.size();
-    for ( int idx : qgis::as_const( mDefaultValueOnUpdateFields ) )
+    for ( int idx : std::as_const( mDefaultValueOnUpdateFields ) )
     {
       if ( idx < 0 || idx >= size )
         continue;
@@ -845,23 +848,20 @@ QgsRectangle QgsVectorLayer::extent() const
 
   if ( !mValidExtent && mLazyExtent && mDataProvider && !mDataProvider->hasMetadata() && mReadExtentFromXml && !mXmlExtent.isNull() )
   {
-    mExtent = mXmlExtent;
+    updateExtent( mXmlExtent );
     mValidExtent = true;
     mLazyExtent = false;
   }
 
   if ( !mValidExtent && mLazyExtent && mDataProvider && mDataProvider->isValid() )
   {
-    // get the extent
-    QgsRectangle mbr = mDataProvider->extent();
+    // store the extent
+    updateExtent( mDataProvider->extent() );
+    mValidExtent = true;
+    mLazyExtent = false;
 
     // show the extent
-    QgsDebugMsgLevel( QStringLiteral( "Extent of layer: %1" ).arg( mbr.toString() ), 3 );
-    // store the extent
-    mValidExtent = true;
-    mExtent = mbr;
-
-    mLazyExtent = false;
+    QgsDebugMsgLevel( QStringLiteral( "Extent of layer: %1" ).arg( mExtent.toString() ), 3 );
   }
 
   if ( mValidExtent )
@@ -874,7 +874,7 @@ QgsRectangle QgsVectorLayer::extent() const
   }
 
   if ( !mEditBuffer ||
-       ( mEditBuffer->mDeletedFeatureIds.isEmpty() && mEditBuffer->mChangedGeometries.isEmpty() ) ||
+       ( !mDataProvider->transaction() && ( mEditBuffer->deletedFeatureIds().isEmpty() && mEditBuffer->changedGeometries().isEmpty() ) ) ||
        QgsDataSourceUri( mDataProvider->dataSourceUri() ).useEstimatedMetadata() )
   {
     mDataProvider->updateExtents();
@@ -883,17 +883,18 @@ QgsRectangle QgsVectorLayer::extent() const
     // but only when there are some features already
     if ( mDataProvider->featureCount() != 0 )
     {
-      QgsRectangle r = mDataProvider->extent();
+      const QgsRectangle r = mDataProvider->extent();
       rect.combineExtentWith( r );
     }
 
-    if ( mEditBuffer )
+    if ( mEditBuffer && !mDataProvider->transaction() )
     {
-      for ( QgsFeatureMap::const_iterator it = mEditBuffer->mAddedFeatures.constBegin(); it != mEditBuffer->mAddedFeatures.constEnd(); ++it )
+      const auto addedFeatures = mEditBuffer->addedFeatures();
+      for ( QgsFeatureMap::const_iterator it = addedFeatures.constBegin(); it != addedFeatures.constEnd(); ++it )
       {
         if ( it->hasGeometry() )
         {
-          QgsRectangle r = it->geometry().boundingBox();
+          const QgsRectangle r = it->geometry().boundingBox();
           rect.combineExtentWith( r );
         }
       }
@@ -909,7 +910,7 @@ QgsRectangle QgsVectorLayer::extent() const
     {
       if ( fet.hasGeometry() && fet.geometry().type() != QgsWkbTypes::UnknownGeometry )
       {
-        QgsRectangle bb = fet.geometry().boundingBox();
+        const QgsRectangle bb = fet.geometry().boundingBox();
         rect.combineExtentWith( bb );
       }
     }
@@ -921,8 +922,8 @@ QgsRectangle QgsVectorLayer::extent() const
     rect = QgsRectangle(); // use rectangle with zero coordinates
   }
 
+  updateExtent( rect );
   mValidExtent = true;
-  mExtent = rect;
 
   // Send this (hopefully) up the chain to the map canvas
   emit recalculateExtents();
@@ -1661,7 +1662,7 @@ void QgsVectorLayer::setDataSource( const QString &dataSource, const QString &ba
   {
     std::unique_ptr< QgsScopedRuntimeProfile > profile;
     if ( QgsApplication::profiler()->groupIsActive( QStringLiteral( "projectload" ) ) )
-      profile = qgis::make_unique< QgsScopedRuntimeProfile >( tr( "Load layer style" ), QStringLiteral( "projectload" ) );
+      profile = std::make_unique< QgsScopedRuntimeProfile >( tr( "Load layer style" ), QStringLiteral( "projectload" ) );
 
     bool defaultLoadedFlag = false;
 
@@ -1753,7 +1754,7 @@ bool QgsVectorLayer::setDataProvider( QString const &provider, const QgsDataProv
 
   std::unique_ptr< QgsScopedRuntimeProfile > profile;
   if ( QgsApplication::profiler()->groupIsActive( QStringLiteral( "projectload" ) ) )
-    profile = qgis::make_unique< QgsScopedRuntimeProfile >( tr( "Create %1 provider" ).arg( provider ), QStringLiteral( "projectload" ) );
+    profile = std::make_unique< QgsScopedRuntimeProfile >( tr( "Create %1 provider" ).arg( provider ), QStringLiteral( "projectload" ) );
 
   mDataProvider = qobject_cast<QgsVectorDataProvider *>( QgsProviderRegistry::instance()->createProvider( provider, mDataSource, options, flags ) );
   if ( !mDataProvider )
@@ -1865,7 +1866,7 @@ bool QgsVectorLayer::writeXml( QDomNode &layer_node,
     return false;
   }
 
-  mapLayerNode.setAttribute( QStringLiteral( "type" ), QStringLiteral( "vector" ) );
+  mapLayerNode.setAttribute( QStringLiteral( "type" ), QgsMapLayerFactory::typeToString( QgsMapLayerType::VectorLayer ) );
 
   // set the geometry type
   mapLayerNode.setAttribute( QStringLiteral( "geometry" ), QgsWkbTypes::geometryDisplayString( geometryType() ) );
@@ -2670,7 +2671,7 @@ bool QgsVectorLayer::writeSymbology( QDomNode &node, QDomDocument &doc, QString 
     fieldConfigurationElement = doc.createElement( QStringLiteral( "fieldConfiguration" ) );
     node.appendChild( fieldConfigurationElement );
 
-    for ( const QgsField &field : qgis::as_const( mFields ) )
+    for ( const QgsField &field : std::as_const( mFields ) )
     {
       QDomElement fieldElement = doc.createElement( QStringLiteral( "field" ) );
       fieldElement.setAttribute( QStringLiteral( "name" ), field.name() );
@@ -2702,7 +2703,7 @@ bool QgsVectorLayer::writeSymbology( QDomNode &node, QDomDocument &doc, QString 
   {
     //attribute aliases
     QDomElement aliasElem = doc.createElement( QStringLiteral( "aliases" ) );
-    for ( const QgsField &field : qgis::as_const( mFields ) )
+    for ( const QgsField &field : std::as_const( mFields ) )
     {
       QDomElement aliasEntryElem = doc.createElement( QStringLiteral( "alias" ) );
       aliasEntryElem.setAttribute( QStringLiteral( "field" ), field.name() );
@@ -2714,7 +2715,7 @@ bool QgsVectorLayer::writeSymbology( QDomNode &node, QDomDocument &doc, QString 
 
     //default expressions
     QDomElement defaultsElem = doc.createElement( QStringLiteral( "defaults" ) );
-    for ( const QgsField &field : qgis::as_const( mFields ) )
+    for ( const QgsField &field : std::as_const( mFields ) )
     {
       QDomElement defaultElem = doc.createElement( QStringLiteral( "default" ) );
       defaultElem.setAttribute( QStringLiteral( "field" ), field.name() );
@@ -2726,7 +2727,7 @@ bool QgsVectorLayer::writeSymbology( QDomNode &node, QDomDocument &doc, QString 
 
     // constraints
     QDomElement constraintsElem = doc.createElement( QStringLiteral( "constraints" ) );
-    for ( const QgsField &field : qgis::as_const( mFields ) )
+    for ( const QgsField &field : std::as_const( mFields ) )
     {
       QDomElement constraintElem = doc.createElement( QStringLiteral( "constraint" ) );
       constraintElem.setAttribute( QStringLiteral( "field" ), field.name() );
@@ -2740,7 +2741,7 @@ bool QgsVectorLayer::writeSymbology( QDomNode &node, QDomDocument &doc, QString 
 
     // constraint expressions
     QDomElement constraintExpressionsElem = doc.createElement( QStringLiteral( "constraintExpressions" ) );
-    for ( const QgsField &field : qgis::as_const( mFields ) )
+    for ( const QgsField &field : std::as_const( mFields ) )
     {
       QDomElement constraintExpressionElem = doc.createElement( QStringLiteral( "constraint" ) );
       constraintExpressionElem.setAttribute( QStringLiteral( "field" ), field.name() );
@@ -3231,7 +3232,7 @@ bool QgsVectorLayer::deleteAttributes( const QList<int> &attrs )
 
   std::sort( attrList.begin(), attrList.end(), std::greater<int>() );
 
-  for ( int attr : qgis::as_const( attrList ) )
+  for ( int attr : std::as_const( attrList ) )
   {
     if ( deleteAttribute( attr ) )
     {
@@ -3363,13 +3364,13 @@ long QgsVectorLayer::featureCount() const
   if ( ! mDataProvider )
     return -1;
   return mDataProvider->featureCount() +
-         ( mEditBuffer ? mEditBuffer->mAddedFeatures.size() - mEditBuffer->mDeletedFeatureIds.size() : 0 );
+         ( mEditBuffer && ! mDataProvider->transaction() ? mEditBuffer->addedFeatures().size() - mEditBuffer->deletedFeatureIds().size() : 0 );
 }
 
 QgsFeatureSource::FeatureAvailability QgsVectorLayer::hasFeatures() const
 {
-  const QgsFeatureIds deletedFeatures( mEditBuffer ? mEditBuffer->deletedFeatureIds() : QgsFeatureIds() );
-  const QgsFeatureMap addedFeatures( mEditBuffer ? mEditBuffer->addedFeatures() : QgsFeatureMap() );
+  const QgsFeatureIds deletedFeatures( mEditBuffer && ! mDataProvider->transaction() ? mEditBuffer->deletedFeatureIds() : QgsFeatureIds() );
+  const QgsFeatureMap addedFeatures( mEditBuffer && ! mDataProvider->transaction() ? mEditBuffer->addedFeatures() : QgsFeatureMap() );
 
   if ( mEditBuffer && !deletedFeatures.empty() )
   {
@@ -3453,9 +3454,9 @@ bool QgsVectorLayer::rollBack( bool deleteBuffer )
     return false;
   }
 
-  bool rollbackExtent = !mEditBuffer->mDeletedFeatureIds.isEmpty() ||
-                        !mEditBuffer->mAddedFeatures.isEmpty() ||
-                        !mEditBuffer->mChangedGeometries.isEmpty();
+  bool rollbackExtent = !mDataProvider->transaction() && ( !mEditBuffer->deletedFeatureIds().isEmpty() ||
+                        !mEditBuffer->addedFeatures().isEmpty() ||
+                        !mEditBuffer->changedGeometries().isEmpty() );
 
   emit beforeRollBack();
 
@@ -3766,7 +3767,7 @@ void QgsVectorLayer::destroyEditCommand()
   // and delete, so we add a dummy obsolete command to force this to occur.
   // Pushing the new command deletes the destroyed one, and since the new
   // command is obsolete it's automatically deleted by the undo stack.
-  std::unique_ptr< QUndoCommand > command = qgis::make_unique< QUndoCommand >();
+  std::unique_ptr< QUndoCommand > command = std::make_unique< QUndoCommand >();
   command->setObsolete( true );
   undoStack()->push( command.release() );
 
@@ -4040,7 +4041,7 @@ QSet<QVariant> QgsVectorLayer::uniqueValues( int index, int limit ) const
     {
       uniqueValues = mDataProvider->uniqueValues( index, limit );
 
-      if ( mEditBuffer )
+      if ( mEditBuffer && ! mDataProvider->transaction() )
       {
         QSet<QString> vals;
         const auto constUniqueValues = uniqueValues;
@@ -4088,10 +4089,11 @@ QSet<QVariant> QgsVectorLayer::uniqueValues( int index, int limit ) const
 
     case QgsFields::OriginEdit:
       // the layer is editable, but in certain cases it can still be avoided going through all features
-      if ( mEditBuffer->mDeletedFeatureIds.isEmpty() &&
-           mEditBuffer->mAddedFeatures.isEmpty() &&
-           !mEditBuffer->mDeletedAttributeIds.contains( index ) &&
-           mEditBuffer->mChangedAttributeValues.isEmpty() )
+      if ( mDataProvider->transaction() || (
+             mEditBuffer->deletedFeatureIds().isEmpty() &&
+             mEditBuffer->addedFeatures().isEmpty() &&
+             !mEditBuffer->deletedAttributeIds().contains( index ) &&
+             mEditBuffer->changedAttributeValues().isEmpty() ) )
       {
         uniqueValues = mDataProvider->uniqueValues( index, limit );
         return uniqueValues;
@@ -4147,7 +4149,7 @@ QStringList QgsVectorLayer::uniqueStringsMatching( int index, const QString &sub
     {
       results = mDataProvider->uniqueStringsMatching( index, substring, limit, feedback );
 
-      if ( mEditBuffer )
+      if ( mEditBuffer && ! mDataProvider->transaction() )
       {
         QgsFeatureMap added = mEditBuffer->addedFeatures();
         QMapIterator< QgsFeatureId, QgsFeature > addedIt( added );
@@ -4186,10 +4188,10 @@ QStringList QgsVectorLayer::uniqueStringsMatching( int index, const QString &sub
 
     case QgsFields::OriginEdit:
       // the layer is editable, but in certain cases it can still be avoided going through all features
-      if ( mEditBuffer->mDeletedFeatureIds.isEmpty() &&
-           mEditBuffer->mAddedFeatures.isEmpty() &&
-           !mEditBuffer->mDeletedAttributeIds.contains( index ) &&
-           mEditBuffer->mChangedAttributeValues.isEmpty() )
+      if ( mDataProvider->transaction() || ( mEditBuffer->deletedFeatureIds().isEmpty() &&
+                                             mEditBuffer->addedFeatures().isEmpty() &&
+                                             !mEditBuffer->deletedAttributeIds().contains( index ) &&
+                                             mEditBuffer->changedAttributeValues().isEmpty() ) )
       {
         return mDataProvider->uniqueStringsMatching( index, substring, limit, feedback );
       }
@@ -4257,7 +4259,7 @@ QVariant QgsVectorLayer::minimumOrMaximumValue( int index, bool minimum ) const
     case QgsFields::OriginProvider: //a provider field
     {
       QVariant val = minimum ? mDataProvider->minimumValue( index ) : mDataProvider->maximumValue( index );
-      if ( mEditBuffer )
+      if ( mEditBuffer && ! mDataProvider->transaction() )
       {
         QgsFeatureMap added = mEditBuffer->addedFeatures();
         QMapIterator< QgsFeatureId, QgsFeature > addedIt( added );
@@ -4290,10 +4292,10 @@ QVariant QgsVectorLayer::minimumOrMaximumValue( int index, bool minimum ) const
     case QgsFields::OriginEdit:
     {
       // the layer is editable, but in certain cases it can still be avoided going through all features
-      if ( mEditBuffer->mDeletedFeatureIds.isEmpty() &&
-           mEditBuffer->mAddedFeatures.isEmpty() &&
-           !mEditBuffer->mDeletedAttributeIds.contains( index ) &&
-           mEditBuffer->mChangedAttributeValues.isEmpty() )
+      if ( mDataProvider->transaction() || ( mEditBuffer->deletedFeatureIds().isEmpty() &&
+                                             mEditBuffer->addedFeatures().isEmpty() &&
+                                             !mEditBuffer->deletedAttributeIds().contains( index ) &&
+                                             mEditBuffer->changedAttributeValues().isEmpty() ) )
       {
         return minimum ? mDataProvider->minimumValue( index ) : mDataProvider->maximumValue( index );
       }
@@ -5390,6 +5392,7 @@ void QgsVectorLayer::onAfterCommitChangesDependency()
 {
   mDataChangedFired = true;
   reload();
+  mDataChangedFired = false;
 }
 
 bool QgsVectorLayer::setDependencies( const QSet<QgsMapLayerDependency> &oDeps )
@@ -5405,7 +5408,7 @@ bool QgsVectorLayer::setDependencies( const QSet<QgsMapLayerDependency> &oDeps )
   QSet<QgsMapLayerDependency> toAdd = deps - dependencies();
 
   // disconnect layers that are not present in the list of dependencies anymore
-  for ( const QgsMapLayerDependency &dep : qgis::as_const( mDependencies ) )
+  for ( const QgsMapLayerDependency &dep : std::as_const( mDependencies ) )
   {
     QgsVectorLayer *lyr = static_cast<QgsVectorLayer *>( QgsProject::instance()->mapLayer( dep.layerId() ) );
     if ( !lyr )
@@ -5426,7 +5429,7 @@ bool QgsVectorLayer::setDependencies( const QSet<QgsMapLayerDependency> &oDeps )
   emit dependenciesChanged();
 
   // connect to new layers
-  for ( const QgsMapLayerDependency &dep : qgis::as_const( mDependencies ) )
+  for ( const QgsMapLayerDependency &dep : std::as_const( mDependencies ) )
   {
     QgsVectorLayer *lyr = static_cast<QgsVectorLayer *>( QgsProject::instance()->mapLayer( dep.layerId() ) );
     if ( !lyr )

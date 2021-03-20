@@ -31,6 +31,9 @@
 #include <QImageWriter>
 #include <QSize>
 #include <QSvgGenerator>
+#include <QBuffer>
+#include <QTimeZone>
+#include <QTextStream>
 
 #include "gdal.h"
 #include "cpl_conv.h"
@@ -396,14 +399,14 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToImage( const QString 
   }
   else
   {
-    for ( int page : qgis::as_const( settings.pages ) )
+    for ( int page : std::as_const( settings.pages ) )
     {
       if ( page >= 0 && page < mLayout->pageCollection()->pageCount() )
         pages << page;
     }
   }
 
-  for ( int page : qgis::as_const( pages ) )
+  for ( int page : std::as_const( pages ) )
   {
     if ( !mLayout->pageCollection()->shouldExportPage( page ) )
     {
@@ -533,7 +536,7 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
 
   std::unique_ptr< QgsLayoutGeoPdfExporter > geoPdfExporter;
   if ( settings.writeGeoPdf || settings.exportLayersAsSeperateFiles )  //#spellok
-    geoPdfExporter = qgis::make_unique< QgsLayoutGeoPdfExporter >( mLayout );
+    geoPdfExporter = std::make_unique< QgsLayoutGeoPdfExporter >( mLayout );
 
   mLayout->renderContext().setFlags( settings.flags );
 
@@ -623,7 +626,7 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
         // setup georeferencing
         QList< QgsLayoutItemMap * > maps;
         mLayout->layoutItems( maps );
-        for ( QgsLayoutItemMap *map : qgis::as_const( maps ) )
+        for ( QgsLayoutItemMap *map : std::as_const( maps ) )
         {
           QgsAbstractGeoPdfExporter::GeoReferencedSection georef;
           georef.crs = map->crs();

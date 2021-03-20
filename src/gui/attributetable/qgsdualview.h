@@ -25,6 +25,9 @@
 #include "qgsattributeform.h"
 #include "qgis_gui.h"
 
+#include <QPointer>
+#include <QUuid>
+
 class QgsFeatureRequest;
 class QgsMapLayerAction;
 class QgsScrollArea;
@@ -344,7 +347,11 @@ class GUI_EXPORT QgsDualView : public QStackedWidget, private Ui::QgsDualViewBas
 
     void resizeColumn();
 
+    void resizeAllColumns();
+
     void autosizeColumn();
+
+    void autosizeAllColumns();
 
     void previewExpressionChanged( const QString &expression );
 

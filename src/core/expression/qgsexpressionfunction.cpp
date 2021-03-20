@@ -61,6 +61,11 @@
 #include "qgsunittypes.h"
 #include "qgsspatialindex.h"
 
+#include <QMimeDatabase>
+#include <QProcessEnvironment>
+#include <QCryptographicHash>
+#include <QRegularExpression>
+#include <QUuid>
 
 typedef QList<QgsExpressionFunction *> ExpressionFunctionList;
 
@@ -1357,6 +1362,30 @@ static QVariant fcnLength( const QVariantList &values, const QgsExpressionContex
   return QVariant( str.length() );
 }
 
+static QVariant fcnLength3D( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const QgsGeometry geom = QgsExpressionUtils::getGeometry( values.at( 0 ), parent );
+
+  if ( geom.type() != QgsWkbTypes::LineGeometry )
+    return QVariant();
+
+  double totalLength = 0;
+  for ( auto it = geom.const_parts_begin(); it != geom.const_parts_end(); ++it )
+  {
+    if ( const QgsLineString *line = qgsgeometry_cast< const QgsLineString * >( *it ) )
+    {
+      totalLength += line->length3D();
+    }
+    else
+    {
+      std::unique_ptr< QgsLineString > segmentized( qgsgeometry_cast< const QgsCurve * >( *it )->curveToLine() );
+      totalLength += segmentized->length3D();
+    }
+  }
+
+  return totalLength;
+}
+
 static QVariant fcnReplace( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   if ( values.count() == 2 && values.at( 1 ).type() == QVariant::Map )
@@ -1416,6 +1445,7 @@ static QVariant fcnReplace( const QVariantList &values, const QgsExpressionConte
     return QVariant();
   }
 }
+
 static QVariant fcnRegexpReplace( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   QString str = QgsExpressionUtils::getStringValue( values.at( 0 ), parent );
@@ -1515,17 +1545,10 @@ static QVariant fcnRegexpSubstr( const QVariantList &values, const QgsExpression
 static QVariant fcnUuid( const QVariantList &values, const QgsExpressionContext *, QgsExpression *, const QgsExpressionNodeFunction * )
 {
   QString uuid = QUuid::createUuid().toString();
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  if ( values.at( 0 ).toString().compare( QStringLiteral( "WithoutBraces" ), Qt::CaseInsensitive ) == 0 )
-    uuid.remove( QRegExp( "[{}]" ) );
-  else if ( values.at( 0 ).toString().compare( QStringLiteral( "Id128" ), Qt::CaseInsensitive ) == 0 )
-    uuid.remove( QRegExp( "[{}-]" ) );
-#else
   if ( values.at( 0 ).toString().compare( QStringLiteral( "WithoutBraces" ), Qt::CaseInsensitive ) == 0 )
     uuid = QUuid::createUuid().toString( QUuid::StringFormat::WithoutBraces );
   else if ( values.at( 0 ).toString().compare( QStringLiteral( "Id128" ), Qt::CaseInsensitive ) == 0 )
     uuid = QUuid::createUuid().toString( QUuid::StringFormat::Id128 );
-#endif
   return uuid;
 }
 
@@ -2743,7 +2766,7 @@ static QVariant fcnCollectGeometries( const QVariantList &values, const QgsExpre
 
   QVector< QgsGeometry > parts;
   parts.reserve( list.size() );
-  for ( const QVariant &value : qgis::as_const( list ) )
+  for ( const QVariant &value : std::as_const( list ) )
   {
     if ( value.canConvert<QgsGeometry>() )
     {
@@ -2850,7 +2873,7 @@ static QVariant fcnMakePolygon( const QVariantList &values, const QgsExpressionC
   if ( outerRing.type() != QgsWkbTypes::LineGeometry || outerRing.isNull() )
     return QVariant();
 
-  std::unique_ptr< QgsPolygon > polygon = qgis::make_unique< QgsPolygon >();
+  std::unique_ptr< QgsPolygon > polygon = std::make_unique< QgsPolygon >();
 
   const QgsCurve *exteriorRing = qgsgeometry_cast< QgsCurve * >( outerRing.constGet() );
   if ( !exteriorRing && outerRing.isMultipart() )
@@ -4315,7 +4338,7 @@ static QVariant fcnOrderParts( const QVariantList &values, const QgsExpressionCo
   while ( orderedGeom->partCount() )
     orderedGeom->removeGeometry( 0 );
 
-  for ( const QgsFeature &feature : qgis::as_const( partFeatures ) )
+  for ( const QgsFeature &feature : std::as_const( partFeatures ) )
   {
     orderedGeom->addGeometry( feature.geometry().constGet()->clone() );
   }
@@ -5309,6 +5332,11 @@ static QVariant fcnArrayContains( const QVariantList &values, const QgsExpressio
   return QVariant( QgsExpressionUtils::getListValue( values.at( 0 ), parent ).contains( values.at( 1 ) ) );
 }
 
+static QVariant fcnArrayCount( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  return QVariant( QgsExpressionUtils::getListValue( values.at( 0 ), parent ).count( values.at( 1 ) ) );
+}
+
 static QVariant fcnArrayAll( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   QVariantList listA = QgsExpressionUtils::getListValue( values.at( 0 ), parent );
@@ -5569,6 +5597,94 @@ static QVariant fcnArrayRemoveAll( const QVariantList &values, const QgsExpressi
   QVariantList list = QgsExpressionUtils::getListValue( values.at( 0 ), parent );
   list.removeAll( values.at( 1 ) );
   return convertToSameType( list, values.at( 0 ).type() );
+}
+
+static QVariant fcnArrayReplace( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  if ( values.count() == 2 && values.at( 1 ).type() == QVariant::Map )
+  {
+    QVariantMap map = QgsExpressionUtils::getMapValue( values.at( 1 ), parent );
+
+    QVariantList list = QgsExpressionUtils::getListValue( values.at( 0 ), parent );
+    for ( QVariantMap::const_iterator it = map.constBegin(); it != map.constEnd(); ++it )
+    {
+      int index = list.indexOf( it.key() );
+      while ( index >= 0 )
+      {
+        list.replace( index, it.value() );
+        index = list.indexOf( it.key() );
+      }
+    }
+
+    return convertToSameType( list, values.at( 0 ).type() );
+  }
+  else if ( values.count() == 3 )
+  {
+    QVariantList before;
+    QVariantList after;
+    bool isSingleReplacement = false;
+
+    if ( values.at( 1 ).type() != QVariant::List && values.at( 2 ).type() != QVariant::StringList )
+    {
+      before = QVariantList() << values.at( 1 );
+    }
+    else
+    {
+      before = QgsExpressionUtils::getListValue( values.at( 1 ), parent );
+    }
+
+    if ( values.at( 2 ).type() != QVariant::List && values.at( 2 ).type() != QVariant::StringList )
+    {
+      after = QVariantList() << values.at( 2 );
+      isSingleReplacement = true;
+    }
+    else
+    {
+      after = QgsExpressionUtils::getListValue( values.at( 2 ), parent );
+    }
+
+    if ( !isSingleReplacement && before.length() != after.length() )
+    {
+      parent->setEvalErrorString( QObject::tr( "Invalid pair of array, length not identical" ) );
+      return QVariant();
+    }
+
+    QVariantList list = QgsExpressionUtils::getListValue( values.at( 0 ), parent );
+    for ( int i = 0; i < before.length(); i++ )
+    {
+      int index = list.indexOf( before.at( i ) );
+      while ( index >= 0 )
+      {
+        list.replace( index, after.at( isSingleReplacement ? 0 : i ) );
+        index = list.indexOf( before.at( i ) );
+      }
+    }
+
+    return convertToSameType( list, values.at( 0 ).type() );
+  }
+  else
+  {
+    parent->setEvalErrorString( QObject::tr( "Function array_replace requires 2 or 3 arguments" ) );
+    return QVariant();
+  }
+}
+
+static QVariant fcnArrayPrioritize( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  QVariantList list = QgsExpressionUtils::getListValue( values.at( 0 ), parent );
+  QVariantList list_new;
+
+  for ( const QVariant &cur : QgsExpressionUtils::getListValue( values.at( 1 ), parent ) )
+  {
+    while ( list.removeOne( cur ) )
+    {
+      list_new.append( cur );
+    }
+  }
+
+  list_new.append( list );
+
+  return convertToSameType( list_new, values.at( 0 ).type() );
 }
 
 static QVariant fcnArrayCat( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -5880,7 +5996,6 @@ static QVariant fcnGenericHash( const QVariantList &values, const QgsExpressionC
   {
     hash = fcnHash( str, QCryptographicHash::Sha3_512 );
   }
-#if QT_VERSION >= QT_VERSION_CHECK( 5, 9, 2 )
   else if ( method == QLatin1String( "keccak_224" ) )
   {
     hash = fcnHash( str, QCryptographicHash::Keccak_224 );
@@ -5897,7 +6012,6 @@ static QVariant fcnGenericHash( const QVariantList &values, const QgsExpressionC
   {
     hash = fcnHash( str, QCryptographicHash::Keccak_512 );
   }
-#endif
   else
   {
     parent->setEvalErrorString( QObject::tr( "Hash method %1 is not available on this system." ).arg( str ) );
@@ -6437,6 +6551,7 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
         << new QgsStaticExpressionFunction( QStringLiteral( "ascii" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ), fcnAscii, QStringLiteral( "String" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "wordwrap" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "text" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "length" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "delimiter" ), true, "" ), fcnWordwrap, QStringLiteral( "String" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "length" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "text" ), true, "" ), fcnLength, QStringList() << QStringLiteral( "String" ) << QStringLiteral( "GeometryGroup" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "length3D" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) ), fcnLength3D, QStringLiteral( "GeometryGroup" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "replace" ), -1, fcnReplace, QStringLiteral( "String" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "regexp_replace" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "input_string" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "regex" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "replacement" ) ), fcnRegexpReplace, QStringLiteral( "String" ) )
@@ -7031,7 +7146,7 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
     functions
         << new QgsStaticExpressionFunction( QStringLiteral( "layer_property" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "layer" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "property" ) ),
-                                            fcnGetLayerProperty, QStringLiteral( "General" ) )
+                                            fcnGetLayerProperty, QStringLiteral( "Map Layers" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "decode_uri" ),
                                             QgsExpressionFunction::ParameterList()
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "layer" ) )
@@ -7133,6 +7248,7 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
         << new QgsStaticExpressionFunction( QStringLiteral( "array_sort" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "ascending" ), true, true ), fcnArraySort, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_length" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ), fcnArrayLength, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_contains" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnArrayContains, QStringLiteral( "Arrays" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "array_count" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnArrayCount, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_all" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array_a" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "array_b" ) ), fcnArrayAll, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_find" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnArrayFind, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_get" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "pos" ) ), fcnArrayGet, QStringLiteral( "Arrays" ) )
@@ -7150,6 +7266,8 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
         << new QgsStaticExpressionFunction( QStringLiteral( "array_insert" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "pos" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnArrayInsert, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_remove_at" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "pos" ) ), fcnArrayRemoveAt, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_remove_all" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnArrayRemoveAll, QStringLiteral( "Arrays" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "array_replace" ), -1, fcnArrayReplace, QStringLiteral( "Arrays" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "array_prioritize" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "array_prioritize" ) ), fcnArrayPrioritize, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_cat" ), -1, fcnArrayCat, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_slice" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "start_pos" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "end_pos" ) ), fcnArraySlice, QStringLiteral( "Arrays" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "array_reverse" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "array" ) ), fcnArrayReverse, QStringLiteral( "Arrays" ) )
@@ -7160,10 +7278,8 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
         << new QgsStaticExpressionFunction( QStringLiteral( "generate_series" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "start" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "stop" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "step" ), true, 1.0 ), fcnGenerateSeries, QStringLiteral( "Arrays" ) )
 
         //functions for maps
-        << new QgsStaticExpressionFunction( QStringLiteral( "json_to_map" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ), fcnLoadJson, QStringLiteral( "Maps" ) )
-        << new QgsStaticExpressionFunction( QStringLiteral( "from_json" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnLoadJson, QStringLiteral( "Maps" ) )
-        << new QgsStaticExpressionFunction( QStringLiteral( "map_to_json" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "map" ) ), fcnWriteJson, QStringLiteral( "Maps" ) )
-        << new QgsStaticExpressionFunction( QStringLiteral( "to_json" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "json_string" ) ), fcnWriteJson, QStringLiteral( "Maps" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "from_json" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ), fcnLoadJson, QStringLiteral( "Maps" ), QString(), false, QSet<QString>(), false, QStringList() << QStringLiteral( "json_to_map" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "to_json" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "json_string" ) ), fcnWriteJson, QStringLiteral( "Maps" ), QString(), false, QSet<QString>(), false, QStringList() << QStringLiteral( "map_to_json" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "hstore_to_map" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ), fcnHstoreToMap, QStringLiteral( "Maps" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "map_to_hstore" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "map" ) ), fcnMapToHstore, QStringLiteral( "Maps" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "map" ), -1, fcnMap, QStringLiteral( "Maps" ) )
@@ -7179,7 +7295,7 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
     QgsExpressionContextUtils::registerContextFunctions();
 
     //QgsExpression has ownership of all built-in functions
-    for ( QgsExpressionFunction *func : qgis::as_const( functions ) )
+    for ( QgsExpressionFunction *func : std::as_const( functions ) )
     {
       *sOwnedFunctions() << func;
       *sBuiltinFunctions() << func->name();
@@ -7274,7 +7390,7 @@ QVariant QgsArrayForeachExpressionFunction::run( QgsExpressionNode::NodeList *ar
   std::unique_ptr< QgsExpressionContext > tempContext;
   if ( !subContext )
   {
-    tempContext = qgis::make_unique< QgsExpressionContext >();
+    tempContext = std::make_unique< QgsExpressionContext >();
     subContext = tempContext.get();
   }
 
@@ -7369,7 +7485,7 @@ QVariant QgsArrayFilterExpressionFunction::run( QgsExpressionNode::NodeList *arg
   std::unique_ptr< QgsExpressionContext > tempContext;
   if ( !subContext )
   {
-    tempContext = qgis::make_unique< QgsExpressionContext >();
+    tempContext = std::make_unique< QgsExpressionContext >();
     subContext = tempContext.get();
   }
 
@@ -7494,7 +7610,7 @@ QVariant QgsWithVariableExpressionFunction::run( QgsExpressionNode::NodeList *ar
   std::unique_ptr< QgsExpressionContext > tempContext;
   if ( !updatedContext )
   {
-    tempContext = qgis::make_unique< QgsExpressionContext >();
+    tempContext = std::make_unique< QgsExpressionContext >();
     updatedContext = tempContext.get();
   }
 
@@ -7534,7 +7650,7 @@ bool QgsWithVariableExpressionFunction::prepare( const QgsExpressionNodeFunction
   std::unique_ptr< QgsExpressionContext > tempContext;
   if ( !updatedContext )
   {
-    tempContext = qgis::make_unique< QgsExpressionContext >();
+    tempContext = std::make_unique< QgsExpressionContext >();
     updatedContext = tempContext.get();
   }
 

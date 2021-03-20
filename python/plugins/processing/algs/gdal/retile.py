@@ -208,7 +208,7 @@ class retile(GdalAlgorithm):
             delimiter = self.parameterAsString(parameters, self.DELIMITER, context)
             if delimiter:
                 arguments.append('-csvDelim')
-                arguments.append('"{}"'.format(delimiter))
+                arguments.append(delimiter)
 
         arguments.append('-targetDir')
         arguments.append(self.parameterAsString(parameters, self.OUTPUT, context))
@@ -216,11 +216,4 @@ class retile(GdalAlgorithm):
         layers = [l.source() for l in self.parameterAsLayerList(parameters, self.INPUT, context)]
         arguments.extend(layers)
 
-        if isWindows():
-            commands = ["python3", "-m", self.commandName()]
-        else:
-            commands = [self.commandName() + '.py']
-
-        commands.append(GdalUtils.escapeAndJoin(arguments))
-
-        return commands
+        return [self.commandName() + ('.bat' if isWindows() else '.py'), GdalUtils.escapeAndJoin(arguments)]

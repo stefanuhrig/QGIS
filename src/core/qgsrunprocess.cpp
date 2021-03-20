@@ -302,7 +302,7 @@ int QgsBlockingProcess::run( QgsFeedback *feedback )
       p.terminate();
 #endif
     } );
-    connect( &p, qgis::overload< int, QProcess::ExitStatus >::of( &QProcess::finished ), this, [&loop, &result, &exitStatus]( int res, QProcess::ExitStatus st )
+    connect( &p, qOverload< int, QProcess::ExitStatus >( &QProcess::finished ), this, [&loop, &result, &exitStatus]( int res, QProcess::ExitStatus st )
     {
       result = res;
       exitStatus = st;
@@ -337,7 +337,7 @@ int QgsBlockingProcess::run( QgsFeedback *feedback )
 
   if ( requestMadeFromMainThread )
   {
-    std::unique_ptr<ProcessThread> processThread = qgis::make_unique<ProcessThread>( runFunction );
+    std::unique_ptr<ProcessThread> processThread = std::make_unique<ProcessThread>( runFunction );
     processThread->start();
     // wait for thread to gracefully exit
     processThread->wait();

@@ -39,7 +39,7 @@
 QgsVectorDataProvider::QgsVectorDataProvider( const QString &uri, const ProviderOptions &options,
     QgsDataProvider::ReadFlags flags )
   : QgsDataProvider( uri, options, flags )
-  , mTemporalCapabilities( qgis::make_unique< QgsVectorDataProviderTemporalCapabilities >() )
+  , mTemporalCapabilities( std::make_unique< QgsVectorDataProviderTemporalCapabilities >() )
 {
 }
 
@@ -319,6 +319,11 @@ QString QgsVectorDataProvider::capabilitiesString() const
   if ( abilities & QgsVectorDataProvider::CircularGeometries )
   {
     abilitiesList += tr( "Curved Geometries" );
+  }
+
+  if ( abilities & QgsVectorDataProvider::FeatureSymbology )
+  {
+    abilitiesList += tr( "Feature Symbology" );
   }
 
   return abilitiesList.join( QLatin1String( ", " ) );

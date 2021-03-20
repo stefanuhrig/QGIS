@@ -159,6 +159,7 @@ class QgsOgrProvider final: public QgsVectorDataProvider
     QString description() const override;
     QgsTransaction *transaction() const override;
     bool doesStrictFeatureTypeCheck() const override;
+    QgsFeatureRenderer *createRenderer( const QVariantMap &configuration = QVariantMap() ) const override;
 
     //! Returns OGR geometry type
     static OGRwkbGeometryType getOgrGeomType( const QString &driverName, OGRLayerH ogrLayer );
@@ -309,10 +310,12 @@ class QgsOgrProvider final: public QgsVectorDataProvider
 
     mutable QStringList mSubLayerList;
 
-    //! converts \a value from json QVariant to QString
+    //! Converts \a value from json QVariant to QString
     QString jsonStringValue( const QVariant &value ) const;
 
-    bool addFeaturePrivate( QgsFeature &f, QgsFeatureSink::Flags flags );
+    //! The \a incrementalFeatureId will generally be -1, except for a few OGR drivers where QGIS will pass on a value when OGR doesn't set it
+    bool addFeaturePrivate( QgsFeature &f, QgsFeatureSink::Flags flags, QgsFeatureId incrementalFeatureId = -1 );
+
     //! Deletes one feature
     bool deleteFeature( QgsFeatureId id );
 
@@ -765,6 +768,7 @@ class QgsOgrProviderMetadata final: public QgsProviderMetadata
     QVariantMap decodeUri( const QString &uri ) const override;
     QString encodeUri( const QVariantMap &parts ) const override;
     QString filters( FilterType type ) override;
+    ProviderCapabilities providerCapabilities() const override;
     bool uriIsBlocklisted( const QString &uri ) const override;
     QgsVectorLayerExporter::ExportError createEmptyLayer(
       const QString &uri,

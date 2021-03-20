@@ -39,6 +39,8 @@ email                : sherman at mrcc.com
 #include <QWindow>
 #include <QMenu>
 #include <QClipboard>
+#include <QVariantAnimation>
+#include <QPropertyAnimation>
 
 #include "qgis.h"
 #include "qgssettings.h"
@@ -86,6 +88,7 @@ email                : sherman at mrcc.com
 #include "qgsannotationlayer.h"
 #include "qgsmaplayerelevationproperties.h"
 #include "qgscoordinatereferencesystemregistry.h"
+#include "qgslabelingresults.h"
 
 /**
  * \ingroup gui
@@ -280,7 +283,6 @@ QgsMapCanvas::~QgsMapCanvas()
   mScene->deleteLater();  // crashes in python tests on windows
 
   delete mCache;
-  delete mLabelingResults;
 }
 
 void QgsMapCanvas::setMagnificationFactor( double factor, const QgsPointXY *center )
@@ -467,9 +469,12 @@ void QgsMapCanvas::setMapSettingsFlags( QgsMapSettings::Flags flags )
   refresh();
 }
 
-const QgsLabelingResults *QgsMapCanvas::labelingResults() const
+const QgsLabelingResults *QgsMapCanvas::labelingResults( bool allowOutdatedResults ) const
 {
-  return mLabelingResults;
+  if ( !allowOutdatedResults && mLabelingResultsOutdated )
+    return nullptr;
+
+  return mLabelingResults.get();
 }
 
 void QgsMapCanvas::setCachingEnabled( bool enabled )
@@ -565,6 +570,8 @@ void QgsMapCanvas::refresh()
 
   // schedule a refresh
   mRefreshTimer->start( 1 );
+
+  mLabelingResultsOutdated = true;
 }
 
 void QgsMapCanvas::refreshMap()
@@ -688,9 +695,9 @@ void QgsMapCanvas::rendererJobFinished()
     // connected to signal work with correct results
     if ( !mJob->usedCachedLabels() )
     {
-      delete mLabelingResults;
-      mLabelingResults = mJob->takeLabelingResults();
+      mLabelingResults.reset( mJob->takeLabelingResults() );
     }
+    mLabelingResultsOutdated = false;
 
     QImage img = mJob->renderedImage();
 
@@ -1624,7 +1631,9 @@ void QgsMapCanvas::flashGeometries( const QList<QgsGeometry> &geometries, const 
   QgsWkbTypes::GeometryType geomType = QgsWkbTypes::geometryType( geometries.at( 0 ).wkbType() );
   QgsRubberBand *rb = new QgsRubberBand( this, geomType );
   for ( const QgsGeometry &geom : geometries )
-    rb->addGeometry( geom, crs );
+    rb->addGeometry( geom, crs, false );
+  rb->updatePosition();
+  rb->update();
 
   if ( geomType == QgsWkbTypes::LineGeometry || geomType == QgsWkbTypes::PointGeometry )
   {
@@ -1877,7 +1886,7 @@ void QgsMapCanvas::endZoomRect( QPoint pos )
 void QgsMapCanvas::mousePressEvent( QMouseEvent *e )
 {
   //use middle mouse button for panning, map tools won't receive any events in that case
-  if ( e->button() == Qt::MidButton )
+  if ( e->button() == Qt::MiddleButton )
   {
     mCanvasProperties->panSelectorDown = true;
     panActionStart( mCanvasProperties->mouseLastXY );
@@ -1919,7 +1928,7 @@ void QgsMapCanvas::mousePressEvent( QMouseEvent *e )
 void QgsMapCanvas::mouseReleaseEvent( QMouseEvent *e )
 {
   //use middle mouse button for panning, map tools won't receive any events in that case
-  if ( e->button() == Qt::MidButton )
+  if ( e->button() == Qt::MiddleButton )
   {
     mCanvasProperties->panSelectorDown = false;
     panActionEnd( mCanvasProperties->mouseLastXY );
@@ -2119,7 +2128,11 @@ void QgsMapCanvas::zoomWithCenter( int x, int y, bool zoomIn )
 
 void QgsMapCanvas::setScaleLocked( bool isLocked )
 {
-  mScaleLocked = isLocked;
+  if ( mScaleLocked != isLocked )
+  {
+    mScaleLocked = isLocked;
+    emit scaleLockChanged( mScaleLocked );
+  }
 }
 
 void QgsMapCanvas::mouseMoveEvent( QMouseEvent *e )
@@ -2497,7 +2510,7 @@ void QgsMapCanvas::dropEvent( QDropEvent *event )
     for ( const QgsMimeDataUtils::Uri &uri : lst )
     {
       bool handled = false;
-      for ( QgsCustomDropHandler *handler : qgis::as_const( mDropHandlers ) )
+      for ( QgsCustomDropHandler *handler : std::as_const( mDropHandlers ) )
       {
         if ( handler && handler->customUriProviderKey() == uri.providerKey )
         {
@@ -2727,7 +2740,7 @@ void QgsMapCanvas::dragEnterEvent( QDragEnterEvent *event )
     for ( const QgsMimeDataUtils::Uri &uri : lst )
     {
       bool handled = false;
-      for ( QgsCustomDropHandler *handler : qgis::as_const( mDropHandlers ) )
+      for ( QgsCustomDropHandler *handler : std::as_const( mDropHandlers ) )
       {
         if ( handler->canHandleCustomUriCanvasDrop( uri, this ) )
         {

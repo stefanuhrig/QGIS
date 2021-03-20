@@ -41,6 +41,7 @@
 #include <QDesktopWidget>
 #include <QMenu>
 #include <QClipboard>
+#include <QMimeData>
 
 #define MIN_VIEW_SCALE 0.05
 #define MAX_VIEW_SCALE 1000.0
@@ -917,7 +918,7 @@ void QgsLayoutView::ungroupSelectedItems()
 
   if ( !ungroupedItems.empty() )
   {
-    for ( QgsLayoutItem *item : qgis::as_const( ungroupedItems ) )
+    for ( QgsLayoutItem *item : std::as_const( ungroupedItems ) )
     {
       item->setSelected( true );
     }
@@ -942,7 +943,7 @@ void QgsLayoutView::mousePressEvent( QMouseEvent *event )
 
   if ( !mTool || !event->isAccepted() )
   {
-    if ( event->button() == Qt::MidButton )
+    if ( event->button() == Qt::MiddleButton )
     {
       // Pan layout with middle mouse button
       setTool( mMidMouseButtonPanTool );
@@ -1162,7 +1163,7 @@ void QgsLayoutView::invalidateCachedRenders()
   QList< QgsLayoutItem *> items;
   currentLayout()->layoutItems( items );
 
-  for ( QgsLayoutItem *item : qgis::as_const( items ) )
+  for ( QgsLayoutItem *item : std::as_const( items ) )
   {
     item->invalidateCache();
   }
@@ -1264,11 +1265,7 @@ QgsLayoutViewSnapMarker::QgsLayoutViewSnapMarker()
 {
   QFont f;
   QFontMetrics fm( f );
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  mSize = fm.width( QStringLiteral( "X" ) );
-#else
   mSize = fm.horizontalAdvance( 'X' );
-#endif
   setPen( QPen( Qt::transparent, mSize ) );
 
   setFlags( flags() | QGraphicsItem::ItemIgnoresTransformations );

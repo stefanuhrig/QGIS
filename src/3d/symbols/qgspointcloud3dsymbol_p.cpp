@@ -33,17 +33,14 @@
 #include <Qt3DRender/QGraphicsApiFilter>
 #include <Qt3DRender/QEffect>
 #include <QPointSize>
+#include <QUrl>
 
 QgsPointCloud3DGeometry::QgsPointCloud3DGeometry( Qt3DCore::QNode *parent, unsigned int byteStride )
   : Qt3DRender::QGeometry( parent )
   , mPositionAttribute( new Qt3DRender::QAttribute( this ) )
   , mParameterAttribute( new Qt3DRender::QAttribute( this ) )
   , mColorAttribute( new Qt3DRender::QAttribute( this ) )
-#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-  , mVertexBuffer( new Qt3DRender::QBuffer( Qt3DRender::QBuffer::VertexBuffer, this ) )
-#else
   , mVertexBuffer( new Qt3DRender::QBuffer( this ) )
-#endif
   , mByteStride( byteStride )
 {
 

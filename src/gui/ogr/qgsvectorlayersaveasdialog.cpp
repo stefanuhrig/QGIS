@@ -32,6 +32,7 @@
 #include <QFileDialog>
 #include <QTextCodec>
 #include <QSpinBox>
+#include <QRegularExpression>
 #include "gdal.h"
 
 static const int COLUMN_IDX_NAME = 0;
@@ -227,7 +228,7 @@ QList<QPair<QLabel *, QWidget *> > QgsVectorLayerSaveAsDialog::createControls( c
         {
           QComboBox *cb = new QComboBox();
           cb->setObjectName( it.key() );
-          for ( const QString &val : qgis::as_const( opt->values ) )
+          for ( const QString &val : std::as_const( opt->values ) )
           {
             cb->addItem( val, val );
           }
@@ -1094,5 +1095,5 @@ void QgsVectorLayerSaveAsDialog::mDeselectAllAttributes_clicked()
 
 void QgsVectorLayerSaveAsDialog::showHelp()
 {
-  QgsHelp::openHelp( QStringLiteral( "managing_data_source/create_layers.html#save-layer-from-an-existing-file" ) );
+  QgsHelp::openHelp( QStringLiteral( "managing_data_source/create_layers.html#creating-new-layers-from-an-existing-layer" ) );
 }

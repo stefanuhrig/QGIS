@@ -153,11 +153,14 @@ cmake -G "%CMAKEGEN%" ^
 	-D QCA_LIBRARY=%OSGEO4W_ROOT%\apps\Qt5\lib\qca-qt5.lib ^
 	-D QSCINTILLA_LIBRARY=%OSGEO4W_ROOT%\apps\Qt5\lib\qscintilla2.lib ^
 	-D DART_TESTING_TIMEOUT=60 ^
+	-D PUSH_TO_CDASH=TRUE ^
 	%CMAKE_OPT% ^
 	%SRCDIR:\=/%
 if errorlevel 1 (echo cmake failed & goto error)
 
 if "%CONFIGONLY%"=="1" (echo Exiting after configuring build directory: %CD% & goto end)
+
+copy %BUILDDIR%\CTestConfig.cmake %SRCDIR%
 
 :skipcmake
 if exist ..\noclean (echo skip clean & goto skipclean)

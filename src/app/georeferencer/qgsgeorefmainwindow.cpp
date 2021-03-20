@@ -29,6 +29,7 @@
 #include <QPen>
 #include <QStringList>
 #include <QList>
+#include <QUrl>
 
 #include "qgssettings.h"
 #include "qgisinterface.h"
@@ -1181,7 +1182,7 @@ void QgsGeoreferencerMainWindow::addRaster( const QString &file )
   QgsRasterLayer::LayerOptions options;
   // never prompt for a crs selection for the input raster!
   options.skipCrsValidation = true;
-  mLayer = qgis::make_unique< QgsRasterLayer >( file, QStringLiteral( "Raster" ), QStringLiteral( "gdal" ), options );
+  mLayer = std::make_unique< QgsRasterLayer >( file, QStringLiteral( "Raster" ), QStringLiteral( "gdal" ), options );
 
   // add layer to map canvas
   mCanvas->setLayers( QList<QgsMapLayer *>() << mLayer.get() );
@@ -1304,7 +1305,7 @@ void QgsGeoreferencerMainWindow::saveGCPs()
     QTextStream points( &pointFile );
     points << QStringLiteral( "#CRS: %1" ).arg( mProjection.toWkt( QgsCoordinateReferenceSystem::WKT_PREFERRED ) ) << endl;
     points << "mapX,mapY,pixelX,pixelY,enable,dX,dY,residual" << endl;
-    for ( QgsGeorefDataPoint *pt : qgis::as_const( mPoints ) )
+    for ( QgsGeorefDataPoint *pt : std::as_const( mPoints ) )
     {
       points << QStringLiteral( "%1,%2,%3,%4,%5,%6,%7,%8" )
              .arg( qgsDoubleToString( pt->transCoords().x() ),
@@ -1545,7 +1546,7 @@ bool QgsGeoreferencerMainWindow::writePDFMapFile( const QString &fileName, const
 
   //create layout
   QgsLayout layout( QgsProject::instance() );
-  std::unique_ptr< QgsLayoutItemPage > page = qgis::make_unique< QgsLayoutItemPage >( &layout );
+  std::unique_ptr< QgsLayoutItemPage > page = std::make_unique< QgsLayoutItemPage >( &layout );
 
   double leftMargin = 8;
   double topMargin = 8;
@@ -1612,10 +1613,10 @@ bool QgsGeoreferencerMainWindow::writePDFReportFile( const QString &fileName, co
   //create layout A4 with 300 dpi
   QgsLayout layout( QgsProject::instance() );
 
-  std::unique_ptr< QgsLayoutItemPage > page = qgis::make_unique< QgsLayoutItemPage >( &layout );
+  std::unique_ptr< QgsLayoutItemPage > page = std::make_unique< QgsLayoutItemPage >( &layout );
   page->setPageSize( QgsLayoutSize( 210, 297 ) ); //A4
   layout.pageCollection()->addPage( page.release() );
-  std::unique_ptr< QgsLayoutItemPage > page2 = qgis::make_unique< QgsLayoutItemPage >( &layout );
+  std::unique_ptr< QgsLayoutItemPage > page2 = std::make_unique< QgsLayoutItemPage >( &layout );
   page2->setPageSize( QgsLayoutSize( 210, 297 ) ); //A4
   layout.pageCollection()->addPage( page2.release() );
 
@@ -1889,7 +1890,7 @@ QString QgsGeoreferencerMainWindow::generateGDALtranslateCommand( bool generateT
     gdalCommand << QStringLiteral( "-co TFW=YES" );
   }
 
-  for ( QgsGeorefDataPoint *pt : qgis::as_const( mPoints ) )
+  for ( QgsGeorefDataPoint *pt : std::as_const( mPoints ) )
   {
     gdalCommand << QStringLiteral( "-gcp %1 %2 %3 %4" ).arg( pt->pixelCoords().x() ).arg( -pt->pixelCoords().y() )
                 .arg( pt->transCoords().x() ).arg( pt->transCoords().y() );

@@ -35,6 +35,8 @@
 #include "qgsvectorlayerutils.h"
 #include "qgslogger.h"
 
+#include <QTextCodec>
+
 #ifdef HAVE_SERVER_PYTHON_PLUGINS
 #include "qgsfilterrestorer.h"
 #include "qgsaccesscontrol.h"
@@ -1115,7 +1117,7 @@ void QgsWfs3CollectionsItemsHandler::handleRequest( const QgsServerApiContext &c
   const std::string title { mapLayer->title().isEmpty() ? mapLayer->name().toStdString() : mapLayer->title().toStdString() };
 
   // Get parameters
-  QVariantMap params { values( context )};
+  QVariantMap params = values( context );
 
   switch ( context.request()->method() )
   {
@@ -1463,7 +1465,7 @@ void QgsWfs3CollectionsItemsHandler::handleRequest( const QgsServerApiContext &c
           {
             authorizedFieldNames.push_back( f.name() );
           }
-          const QVariantMap properties { QgsJsonUtils::parseJson( postData["properties"].dump( ) ).toMap( ) };
+          const QVariantMap properties = QgsJsonUtils::parseJson( postData["properties"].dump( ) ).toMap( );
           const QgsFields fields = mapLayer->fields();
           for ( const auto &field : fields )
           {
@@ -1475,7 +1477,7 @@ void QgsWfs3CollectionsItemsHandler::handleRequest( const QgsServerApiContext &c
               }
               else
               {
-                QVariant value { properties.value( field.name() ) };
+                QVariant value = properties.value( field.name() );
                 // Convert blobs
                 if ( ! properties.value( field.name() ).isNull() && static_cast<QMetaType::Type>( field.type() ) == QMetaType::QByteArray )
                 {
@@ -1730,7 +1732,7 @@ void QgsWfs3CollectionsFeatureHandler::handleRequest( const QgsServerApiContext 
           {
             authorizedFieldNames.push_back( f.name() );
           }
-          const QVariantMap properties { QgsJsonUtils::parseJson( postData["properties"].dump( ) ).toMap( ) };
+          const QVariantMap properties = QgsJsonUtils::parseJson( postData["properties"].dump( ) ).toMap( );
           const QgsFields fields = mapLayer->fields();
           int fieldIndex = 0;
           for ( const auto &field : fields )
@@ -1743,7 +1745,7 @@ void QgsWfs3CollectionsFeatureHandler::handleRequest( const QgsServerApiContext 
               }
               else
               {
-                QVariant value { properties.value( field.name() ) };
+                QVariant value = properties.value( field.name() );
                 // Convert blobs
                 if ( ! properties.value( field.name() ).isNull() && static_cast<QMetaType::Type>( field.type() ) == QMetaType::QByteArray )
                 {
@@ -1850,7 +1852,7 @@ void QgsWfs3CollectionsFeatureHandler::handleRequest( const QgsServerApiContext 
           {
             authorizedFieldNames.push_back( f.name() );
           }
-          const QVariantMap properties { QgsJsonUtils::parseJson( postData["modify"].dump( ) ).toMap( ) };
+          const QVariantMap properties = QgsJsonUtils::parseJson( postData["modify"].dump( ) ).toMap( );
           const QgsFields fields = mapLayer->fields();
           int fieldIndex = 0;
           for ( const auto &field : fields )
@@ -1863,7 +1865,7 @@ void QgsWfs3CollectionsFeatureHandler::handleRequest( const QgsServerApiContext 
               }
               else
               {
-                QVariant value { properties.value( field.name() ) };
+                QVariant value = properties.value( field.name() );
                 // Convert blobs
                 if ( ! properties.value( field.name() ).isNull() && static_cast<QMetaType::Type>( field.type() ) == QMetaType::QByteArray )
                 {

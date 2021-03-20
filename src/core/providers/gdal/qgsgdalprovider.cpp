@@ -56,6 +56,7 @@
 #include <QTime>
 #include <QTextDocument>
 #include <QDebug>
+#include <QRegularExpression>
 
 #include <gdalwarper.h>
 #include <gdal.h>
@@ -167,7 +168,7 @@ QgsGdalProvider::QgsGdalProvider( const QString &uri, const ProviderOptions &opt
 
   std::unique_ptr< QgsScopedRuntimeProfile > profile;
   if ( QgsApplication::profiler()->groupIsActive( QStringLiteral( "projectload" ) ) )
-    profile = qgis::make_unique< QgsScopedRuntimeProfile >( tr( "Open data source" ), QStringLiteral( "projectload" ) );
+    profile = std::make_unique< QgsScopedRuntimeProfile >( tr( "Open data source" ), QStringLiteral( "projectload" ) );
 
   if ( !CPLGetConfigOption( "AAIGRID_DATATYPE", nullptr ) )
   {
@@ -302,46 +303,6 @@ QgsGdalProvider *QgsGdalProvider::clone() const
 {
   return new QgsGdalProvider( *this );
 }
-
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,0,0)
-bool QgsGdalProvider::crsFromWkt( const char *wkt )
-{
-
-  OGRSpatialReferenceH hCRS = OSRNewSpatialReference( nullptr );
-
-  if ( OSRImportFromWkt( hCRS, ( char ** ) &wkt ) == OGRERR_NONE )
-  {
-    if ( OSRAutoIdentifyEPSG( hCRS ) == OGRERR_NONE )
-    {
-      QString authid = QStringLiteral( "%1:%2" )
-                       .arg( OSRGetAuthorityName( hCRS, nullptr ),
-                             OSRGetAuthorityCode( hCRS, nullptr ) );
-      QgsDebugMsgLevel( "authid recognized as " + authid, 2 );
-      mCrs = QgsCoordinateReferenceSystem::fromOgcWmsCrs( authid );
-    }
-    else
-    {
-      // get the proj4 text
-      char *pszProj4 = nullptr;
-      OSRExportToProj4( hCRS, &pszProj4 );
-      QgsDebugMsgLevel( pszProj4, 2 );
-      CPLFree( pszProj4 );
-
-      char *pszWkt = nullptr;
-      OSRExportToWkt( hCRS, &pszWkt );
-      QString myWktString = QString( pszWkt );
-      CPLFree( pszWkt );
-
-      // create CRS from Wkt
-      mCrs = QgsCoordinateReferenceSystem::fromWkt( myWktString );
-    }
-  }
-
-  OSRRelease( hCRS );
-
-  return mCrs.isValid();
-}
-#endif
 
 bool QgsGdalProvider::getCachedGdalHandles( QgsGdalProvider *provider,
     GDALDatasetH &gdalBaseDataset,
@@ -656,7 +617,7 @@ QString QgsGdalProvider::htmlMetadata()
 
 QgsRasterBlock *QgsGdalProvider::block( int bandNo, const QgsRectangle &extent, int width, int height, QgsRasterBlockFeedback *feedback )
 {
-  std::unique_ptr< QgsRasterBlock > block = qgis::make_unique< QgsRasterBlock >( dataType( bandNo ), width, height );
+  std::unique_ptr< QgsRasterBlock > block = std::make_unique< QgsRasterBlock >( dataType( bandNo ), width, height );
   if ( !initIfNeeded() )
     return block.release();
   if ( sourceHasNoDataValue( bandNo ) && useSourceNoDataValue( bandNo ) )
@@ -2572,7 +2533,7 @@ void buildSupportedRasterFileFilterAndExtensions( QString &fileFiltersString, QS
 
   // can't forget the all supported case
   QStringList exts;
-  for ( const QString &ext : qgis::as_const( extensions ) )
+  for ( const QString &ext : std::as_const( extensions ) )
     exts << QStringLiteral( "*.%1 *.%2" ).arg( ext, ext.toUpper() );
   fileFiltersString.prepend( QObject::tr( "All supported files" ) + QStringLiteral( " (%1);;" ).arg( exts.join( QLatin1Char( ' ' ) ) ) );
 
@@ -3033,7 +2994,6 @@ void QgsGdalProvider::initBaseDataset()
   // Get the layer's projection info and set up the
   // QgsCoordinateTransform for this layer
   // NOTE: we must do this before metadata is called
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,0,0)
   QString crsWkt;
   if ( OGRSpatialReferenceH spatialRefSys = GDALGetSpatialRef( mGdalDataset ) )
   {
@@ -3052,11 +3012,6 @@ void QgsGdalProvider::initBaseDataset()
   }
   else
   {
-#else
-  if ( !crsFromWkt( GDALGetProjectionRef( mGdalDataset ) ) &&
-       !crsFromWkt( GDALGetGCPProjection( mGdalDataset ) ) )
-  {
-#endif
     if ( mGdalBaseDataset != mGdalDataset &&
          GDALGetMetadata( mGdalBaseDataset, "RPC" ) )
     {
@@ -3566,6 +3521,11 @@ QList<QPair<QString, QString> > QgsGdalProviderMetadata::pyramidResamplingMethod
   }
 
   return methods;
+}
+
+QgsProviderMetadata::ProviderCapabilities QgsGdalProviderMetadata::providerCapabilities() const
+{
+  return FileBasedUris;
 }
 
 QList<QgsDataItemProvider *> QgsGdalProviderMetadata::dataItemProviders() const

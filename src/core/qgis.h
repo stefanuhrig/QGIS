@@ -384,80 +384,6 @@ inline double qgsRound( double number, int places )
  */
 namespace qgis
 {
-  // as_const
-
-  /**
-   * Adds const to non-const objects.
-   *
-   * To be used as a proxy for std::as_const until we target c++17 minimum.
-   *
-   * \note not available in Python bindings
-   * \since QGIS 3.0
-   */
-  template <typename T> struct QgsAddConst { typedef const T Type; };
-
-  template <typename T>
-  constexpr typename QgsAddConst<T>::Type &as_const( T &t ) noexcept { return t; }
-
-  template <typename T>
-  void as_const( const T && ) = delete;
-
-  // make_unique - from https://stackoverflow.com/a/17902439/1861260
-
-  template<class T> struct _Unique_if
-  {
-    typedef std::unique_ptr<T> _Single_object;
-  };
-
-  template<class T> struct _Unique_if<T[]>
-  {
-    typedef std::unique_ptr<T[]> _Unknown_bound;
-  };
-
-  template<class T, size_t N> struct _Unique_if<T[N]>
-  {
-    typedef void _Known_bound;
-  };
-
-  template<class T, class... Args>
-  typename _Unique_if<T>::_Single_object
-  make_unique( Args &&... args )
-  {
-    return std::unique_ptr<T>( new T( std::forward<Args>( args )... ) );
-  }
-
-  template<class T>
-  typename _Unique_if<T>::_Unknown_bound
-  make_unique( size_t n )
-  {
-    typedef typename std::remove_extent<T>::type U;
-    return std::unique_ptr<T>( new U[n]() );
-  }
-
-  template<class T, class... Args>
-  typename _Unique_if<T>::_Known_bound
-  make_unique( Args &&... ) = delete;
-
-  /**
-   * Used for new-style Qt connects to overloaded signals, avoiding the usual horrible connect syntax required
-   * in these circumstances.
-   *
-   * Example usage:
-   *
-   * connect( mSpinBox, qgis::overload< int >::of( &QSpinBox::valueChanged ), this, &MyClass::mySlot );
-   *
-   * This is an alternative to qOverload, which was implemented in Qt 5.7.
-   *
-   * See https://stackoverflow.com/a/16795664/1861260
-   */
-  template<typename... Args> struct overload
-  {
-    template<typename C, typename R>
-    static constexpr auto of( R( C::*pmf )( Args... ) ) -> decltype( pmf )
-    {
-      return pmf;
-    }
-  };
 
   template<class T>
   QSet<T> listToSet( const QList<T> &list )
@@ -679,25 +605,9 @@ void CORE_EXPORT qgsFree( void *ptr ) SIP_SKIP;
 */
 CONSTLATIN1STRING geoWkt()
 {
-#if PROJ_VERSION_MAJOR>=6
   return QLatin1String(
            R"""(GEOGCRS["WGS 84",DATUM["World Geodetic System 1984",ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["unknown"],AREA["World"],BBOX[-90,-180,90,180]],ID["EPSG",4326]] )"""
          );
-#else
-  return QLatin1String(
-           "GEOGCS[\"WGS 84\", "
-           "  DATUM[\"WGS_1984\", "
-           "    SPHEROID[\"WGS 84\",6378137,298.257223563, "
-           "      AUTHORITY[\"EPSG\",\"7030\"]], "
-           "    TOWGS84[0,0,0,0,0,0,0], "
-           "    AUTHORITY[\"EPSG\",\"6326\"]], "
-           "  PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]], "
-           "  UNIT[\"DMSH\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9108\"]], "
-           "  AXIS[\"Lat\",NORTH], "
-           "  AXIS[\"Long\",EAST], "
-           "  AUTHORITY[\"EPSG\",\"4326\"]]"
-         );
-#endif
 }
 
 //! PROJ4 string that represents a geographic coord sys

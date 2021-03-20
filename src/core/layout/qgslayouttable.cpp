@@ -94,7 +94,7 @@ bool QgsLayoutTable::writePropertiesToElement( QDomElement &elem, QDomDocument &
 
   // display columns
   QDomElement displayColumnsElem = doc.createElement( QStringLiteral( "displayColumns" ) );
-  for ( const QgsLayoutTableColumn &column : qgis::as_const( mColumns ) )
+  for ( const QgsLayoutTableColumn &column : std::as_const( mColumns ) )
   {
     QDomElement columnElem = doc.createElement( QStringLiteral( "column" ) );
     column.writeXml( columnElem, doc );
@@ -103,7 +103,7 @@ bool QgsLayoutTable::writePropertiesToElement( QDomElement &elem, QDomDocument &
   elem.appendChild( displayColumnsElem );
   // sort columns
   QDomElement sortColumnsElem = doc.createElement( QStringLiteral( "sortColumns" ) );
-  for ( const QgsLayoutTableColumn &column : qgis::as_const( mSortColumns ) )
+  for ( const QgsLayoutTableColumn &column : std::as_const( mSortColumns ) )
   {
     QDomElement columnElem = doc.createElement( QStringLiteral( "column" ) );
     column.writeXml( columnElem, doc );
@@ -431,9 +431,9 @@ void QgsLayoutTable::render( QgsLayoutItemRenderContext &context, const QRectF &
   {
     //draw the headers
     int col = 0;
-    for ( const QgsLayoutTableColumn &column : qgis::as_const( mColumns ) )
+    for ( const QgsLayoutTableColumn &column : std::as_const( mColumns ) )
     {
-      std::unique_ptr< QgsExpressionContextScope > headerCellScope = qgis::make_unique< QgsExpressionContextScope >();
+      std::unique_ptr< QgsExpressionContextScope > headerCellScope = std::make_unique< QgsExpressionContextScope >();
       headerCellScope->setVariable( QStringLiteral( "column_number" ), col + 1, true );
       QgsExpressionContextScopePopper popper( context.renderContext().expressionContext(), headerCellScope.release() );
 
@@ -511,7 +511,7 @@ void QgsLayoutTable::render( QgsLayoutItemRenderContext &context, const QRectF &
       //calculate row height
       double rowHeight = mMaxRowHeightMap[row + 1] + 2 * mCellMargin;
 
-      for ( const QgsLayoutTableColumn &column : qgis::as_const( mColumns ) )
+      for ( const QgsLayoutTableColumn &column : std::as_const( mColumns ) )
       {
         const QRectF fullCell( currentX, currentY, mMaxColumnWidthMap[col] + 2 * mCellMargin, rowHeight );
         //draw background
@@ -589,7 +589,7 @@ void QgsLayoutTable::render( QgsLayoutItemRenderContext &context, const QRectF &
       }
       else
       {
-        for ( const QgsLayoutTableColumn &column : qgis::as_const( mColumns ) )
+        for ( const QgsLayoutTableColumn &column : std::as_const( mColumns ) )
         {
           Q_UNUSED( column )
 
@@ -987,7 +987,7 @@ QMap<int, QString> QgsLayoutTable::headerLabels() const
   QMap<int, QString> headers;
 
   int i = 0;
-  for ( const QgsLayoutTableColumn &col : qgis::as_const( mColumns ) )
+  for ( const QgsLayoutTableColumn &col : std::as_const( mColumns ) )
   {
     headers.insert( i, col.heading() );
     i++;
@@ -997,7 +997,7 @@ QMap<int, QString> QgsLayoutTable::headerLabels() const
 
 QgsExpressionContextScope *QgsLayoutTable::scopeForCell( int row, int column ) const
 {
-  std::unique_ptr< QgsExpressionContextScope > cellScope = qgis::make_unique< QgsExpressionContextScope >();
+  std::unique_ptr< QgsExpressionContextScope > cellScope = std::make_unique< QgsExpressionContextScope >();
   cellScope->setVariable( QStringLiteral( "row_number" ), row + 1, true );
   cellScope->setVariable( QStringLiteral( "column_number" ), column + 1, true );
   return cellScope.release();
@@ -1090,7 +1090,7 @@ bool QgsLayoutTable::calculateMaxColumnWidths()
 
   //first, go through all the column headers and calculate the sizes
   int i = 0;
-  for ( const QgsLayoutTableColumn &col : qgis::as_const( mColumns ) )
+  for ( const QgsLayoutTableColumn &col : std::as_const( mColumns ) )
   {
     if ( col.width() > 0 )
     {
@@ -1099,7 +1099,7 @@ bool QgsLayoutTable::calculateMaxColumnWidths()
     }
     else if ( mHeaderMode != QgsLayoutTable::NoHeaders )
     {
-      std::unique_ptr< QgsExpressionContextScope > headerCellScope = qgis::make_unique< QgsExpressionContextScope >();
+      std::unique_ptr< QgsExpressionContextScope > headerCellScope = std::make_unique< QgsExpressionContextScope >();
       headerCellScope->setVariable( QStringLiteral( "column_number" ), i + 1, true );
       QgsExpressionContextScopePopper popper( context.expressionContext(), headerCellScope.release() );
 
@@ -1174,9 +1174,9 @@ bool QgsLayoutTable::calculateMaxRowHeights()
 
   //first, go through all the column headers and calculate the sizes
   int i = 0;
-  for ( const QgsLayoutTableColumn &col : qgis::as_const( mColumns ) )
+  for ( const QgsLayoutTableColumn &col : std::as_const( mColumns ) )
   {
-    std::unique_ptr< QgsExpressionContextScope > headerCellScope = qgis::make_unique< QgsExpressionContextScope >();
+    std::unique_ptr< QgsExpressionContextScope > headerCellScope = std::make_unique< QgsExpressionContextScope >();
     headerCellScope->setVariable( QStringLiteral( "column_number" ), i + 1, true );
     QgsExpressionContextScopePopper popper( context.expressionContext(), headerCellScope.release() );
 

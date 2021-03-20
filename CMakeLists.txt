@@ -432,7 +432,7 @@ if(WITH_CORE)
 
   #############################################################
   # search for Qt5
-  set(QT_MIN_VERSION 5.9.0)
+  set(QT_MIN_VERSION 5.12.0)
 
   # Use Qt5SerialPort optionally for GPS
   set (WITH_QT5SERIALPORT TRUE CACHE BOOL "Determines whether Qt5SerialPort should be tried for GPS positioning")
@@ -560,15 +560,6 @@ if (WITH_CORE)
 endif()
 
 #############################################################
-# enable use of c++11 features where available
-# full c++11 support in clang 3.3+: http://clang.llvm.org/cxx_status.html
-# for Mac, this is probably Apple LLVM 4.2 (based on LLVM 3.2svn, in XCode 4.6+)
-#   or definitely Apple LLVM 5.0 (based on LLVM 3.3svn, in Xcode 5+):
-#   https://gist.github.com/yamaya/2924292
-
-set(CMAKE_CXX_STANDARD 11)
-
-#############################################################
 # enable warnings
 
 if (PEDANTIC)
@@ -687,7 +678,7 @@ add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0x050800)
 # For fast string concatenation
 add_definitions(-DQT_USE_QSTRINGBUILDER)
 
-if (WITH_GEOREFERENCER)
+if (WITH_GEOREFERENCER OR WITH_ANALYSIS)
   find_package(GSL REQUIRED)
   set(HAVE_GEOREFERENCER TRUE)
 endif()
@@ -926,12 +917,7 @@ set(QGIS_INSTALL_SYS_LIBS TRUE CACHE BOOL "If set to TRUE install all required s
 # Python build dependency
 
 find_package(PythonLibrary REQUIRED)
-set(MIN_PYTHON_VERSION "3.6")
-if(${PYTHON_SHORT_VERSION} VERSION_LESS ${MIN_PYTHON_VERSION})
-    message(FATAL_ERROR "Python version ${PYTHON_SHORT_VERSION} is too old. Minimum Python version is ${MIN_PYTHON_VERSION}.")
-endif()
-
-set(MIN_PYTHON_VERSION "3.6")
+set(MIN_PYTHON_VERSION "3.7")
 if(${PYTHON_SHORT_VERSION} VERSION_LESS ${MIN_PYTHON_VERSION})
     message(FATAL_ERROR "Python version ${PYTHON_SHORT_VERSION} is too old. Minimum Python version is ${MIN_PYTHON_VERSION}.")
 endif()

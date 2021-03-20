@@ -1,4 +1,4 @@
-name: QGIS tests
+name: 🧪 QGIS tests
 
 on:
   push:
@@ -18,15 +18,8 @@ on:
     branches:
       - master
       - release-**
-    paths:
-    - 'src/**'
-    - 'external/**'
-    - 'python/**'
-    - 'tests/**'
-    - 'CMakeLists.txt'
-    - '.github/workflows/run-tests.yml'
-    - '.docker/**'
-    - '.ci/**'
+    # paths cannot be filtered on this workflow on pull request as it is a required one in the branch protection
+    # feature request and hacks: https://github.community/t/feature-request-conditional-required-checks/16761
 
 jobs:
   build:
@@ -35,6 +28,7 @@ jobs:
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       GH_WORKSPACE: ${{ github.workspace }} # used in docker compose
       DEFAULT_UBUNTU_BASE: '20.04'
+      RUN_FLAKY_TESTS: ${{ contains( github.event.pull_request.labels.*.name, 'run flaky tests') }}
 
     runs-on: ubuntu-latest
 

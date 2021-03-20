@@ -36,14 +36,11 @@
 
 #include <iostream>
 #include <QObject>
+#include <QLibrary>
 
 #include <ogr_api.h>
 #include <gdal_version.h>
-#if PROJ_VERSION_MAJOR > 4
 #include <proj.h>
-#else
-#include <proj_api.h>
-#endif
 #include <json.hpp>
 
 ConsoleFeedback::ConsoleFeedback( bool useJson )
@@ -60,9 +57,10 @@ void ConsoleFeedback::setProgressText( const QString &text )
 {
   if ( !mUseJson )
     std::cout << text.toLocal8Bit().constData() << '\n';
+  QgsProcessingFeedback::setProgressText( text );
 }
 
-void ConsoleFeedback::reportError( const QString &error, bool )
+void ConsoleFeedback::reportError( const QString &error, bool fatalError )
 {
   if ( !mUseJson )
     std::cerr << "ERROR:\t" << error.toLocal8Bit().constData() << '\n';
@@ -72,6 +70,7 @@ void ConsoleFeedback::reportError( const QString &error, bool )
       mJsonLog.insert( QStringLiteral( "errors" ), QStringList() );
     mJsonLog[ QStringLiteral( "errors" )] = mJsonLog.value( QStringLiteral( "errors" ) ).toStringList() << error;
   }
+  QgsProcessingFeedback::reportError( error, fatalError );
 }
 
 void ConsoleFeedback::pushWarning( const QString &warning )
@@ -84,6 +83,7 @@ void ConsoleFeedback::pushWarning( const QString &warning )
       mJsonLog.insert( QStringLiteral( "warning" ), QStringList() );
     mJsonLog[ QStringLiteral( "warning" )] = mJsonLog.value( QStringLiteral( "warning" ) ).toStringList() << warning;
   }
+  QgsProcessingFeedback::pushWarning( warning );
 }
 
 void ConsoleFeedback::pushInfo( const QString &info )
@@ -96,6 +96,7 @@ void ConsoleFeedback::pushInfo( const QString &info )
       mJsonLog.insert( QStringLiteral( "info" ), QStringList() );
     mJsonLog[ QStringLiteral( "info" )] = mJsonLog.value( QStringLiteral( "info" ) ).toStringList() << info;
   }
+  QgsProcessingFeedback::pushInfo( info );
 }
 
 void ConsoleFeedback::pushCommandInfo( const QString &info )
@@ -108,6 +109,7 @@ void ConsoleFeedback::pushCommandInfo( const QString &info )
       mJsonLog.insert( QStringLiteral( "info" ), QStringList() );
     mJsonLog[ QStringLiteral( "info" )] = mJsonLog.value( QStringLiteral( "info" ) ).toStringList() << info;
   }
+  QgsProcessingFeedback::pushCommandInfo( info );
 }
 
 void ConsoleFeedback::pushDebugInfo( const QString &info )
@@ -120,6 +122,7 @@ void ConsoleFeedback::pushDebugInfo( const QString &info )
       mJsonLog.insert( QStringLiteral( "info" ), QStringList() );
     mJsonLog[ QStringLiteral( "info" )] = mJsonLog.value( QStringLiteral( "info" ) ).toStringList() << info;
   }
+  QgsProcessingFeedback::pushDebugInfo( info );
 }
 
 void ConsoleFeedback::pushConsoleInfo( const QString &info )
@@ -132,6 +135,7 @@ void ConsoleFeedback::pushConsoleInfo( const QString &info )
       mJsonLog.insert( QStringLiteral( "info" ), QStringList() );
     mJsonLog[ QStringLiteral( "info" )] = mJsonLog.value( QStringLiteral( "info" ) ).toStringList() << info;
   }
+  QgsProcessingFeedback::pushConsoleInfo( info );
 }
 
 QVariantMap ConsoleFeedback::jsonLog() const
@@ -655,7 +659,7 @@ int QgsProcessingExec::showAlgorithmHelp( const QString &id, bool useJson )
   const QgsProcessingAlgorithm *alg = nullptr;
   if ( QFile::exists( id ) && QFileInfo( id ).suffix() == QLatin1String( "model3" ) )
   {
-    model = qgis::make_unique< QgsProcessingModelAlgorithm >();
+    model = std::make_unique< QgsProcessingModelAlgorithm >();
     if ( !model->fromFile( id ) )
     {
       std::cerr << QStringLiteral( "File %1 is not a valid Processing model!\n" ).arg( id ).toLocal8Bit().constData();
@@ -843,7 +847,7 @@ int QgsProcessingExec::execute( const QString &id, const QVariantMap &params, co
   const QgsProcessingAlgorithm *alg = nullptr;
   if ( QFile::exists( id ) && QFileInfo( id ).suffix() == QLatin1String( "model3" ) )
   {
-    model = qgis::make_unique< QgsProcessingModelAlgorithm >();
+    model = std::make_unique< QgsProcessingModelAlgorithm >();
     if ( !model->fromFile( id ) )
     {
       std::cerr << QStringLiteral( "File %1 is not a valid Processing model!\n" ).arg( id ).toLocal8Bit().constData();
@@ -906,7 +910,7 @@ int QgsProcessingExec::execute( const QString &id, const QVariantMap &params, co
   std::unique_ptr< QgsProject > project;
   if ( !projectPath.isEmpty() )
   {
-    project = qgis::make_unique< QgsProject >();
+    project = std::make_unique< QgsProject >();
     if ( !project->read( projectPath ) )
     {
       std::cerr << QStringLiteral( "Could not load the QGIS project \"%1\"\n" ).arg( projectPath ).toLocal8Bit().constData();
@@ -979,7 +983,7 @@ int QgsProcessingExec::execute( const QString &id, const QVariantMap &params, co
   if ( !missingParams.isEmpty() )
   {
     std::cerr << QStringLiteral( "ERROR: The following mandatory parameters were not specified\n\n" ).toLocal8Bit().constData();
-    for ( const QgsProcessingParameterDefinition *p : qgis::as_const( missingParams ) )
+    for ( const QgsProcessingParameterDefinition *p : std::as_const( missingParams ) )
     {
       std::cerr << QStringLiteral( "\t%1:\t%2\n" ).arg( p->name(), p->description() ).toLocal8Bit().constData();
     }
@@ -1082,12 +1086,8 @@ void QgsProcessingExec::addVersionInformation( QVariantMap &json )
   json.insert( QStringLiteral( "gdal_version" ), GDALVersionInfo( "RELEASE_NAME" ) );
   json.insert( QStringLiteral( "geos_version" ), GEOSversion() );
 
-#if PROJ_VERSION_MAJOR > 4
   PJ_INFO info = proj_info();
   json.insert( QStringLiteral( "proj_version" ), info.release );
-#else
-  json.insert( QStringLiteral( "proj_version" ), PJ_VERSION );
-#endif
 }
 
 void QgsProcessingExec::addAlgorithmInformation( QVariantMap &algorithmJson, const QgsProcessingAlgorithm *algorithm )

@@ -23,6 +23,7 @@
 #include "qgsreadwritecontext.h"
 #include "qgspropertycollection.h"
 #include "qgsmapunitscale.h"
+#include "qgscalloutposition.h"
 #include <QString>
 #include <QRectF>
 #include <memory>
@@ -56,6 +57,10 @@ class CORE_EXPORT QgsCallout
     {
       sipType = sipType_QgsManhattanLineCallout;
     }
+    else if ( sipCpp->type() == "curved" && dynamic_cast<QgsCurvedLineCallout *>( sipCpp ) != NULL )
+    {
+      sipType = sipType_QgsCurvedLineCallout;
+    }
     else
     {
       sipType = 0;
@@ -74,6 +79,12 @@ class CORE_EXPORT QgsCallout
       DrawCalloutToAllParts, //!< Whether callout lines should be drawn to all feature parts
       AnchorPointPosition, //!< Feature's anchor point position
       LabelAnchorPointPosition, //!< Label's anchor point position
+      OriginX, //!< X-coordinate of callout origin (label anchor) (since QGIS 3.20)
+      OriginY, //!< Y-coordinate of callout origin (label anchor) (since QGIS 3.20)
+      DestinationX, //!< X-coordinate of callout destination (feature anchor) (since QGIS 3.20)
+      DestinationY, //!< Y-coordinate of callout destination (feature anchor) (since QGIS 3.20)
+      Curvature, //!< Curvature of curved line callouts (since QGIS 3.20)
+      Orientation, //!< Orientation of curved line callouts (since QGIS 3.20)
     };
 
     //! Options for draw order (stacking) of callouts
@@ -211,10 +222,51 @@ class CORE_EXPORT QgsCallout
      * \ingroup core
      * \since QGIS 3.10
      */
-    struct CORE_EXPORT QgsCalloutContext
+    class CORE_EXPORT QgsCalloutContext
     {
-      //! TRUE if all parts of associated feature were labeled
-      bool allFeaturePartsLabeled = false;
+      public:
+        //! TRUE if all parts of associated feature were labeled
+        bool allFeaturePartsLabeled = false;
+
+        /**
+         * Contains the CRS of the original feature associated with this callout.
+         *
+         * \since QGIS 3.20
+         */
+        QgsCoordinateReferenceSystem originalFeatureCrs;
+
+        /**
+         * Returns the coordinate transform to convert from the original layer associated with
+         * the callout to the destination map CRS.
+         *
+         * \since QGIS 3.20
+         */
+        QgsCoordinateTransform originalFeatureToMapTransform( const QgsRenderContext &renderContext ) const;
+
+        /**
+         * Adds a rendered callout position.
+         *
+         * The position details such as the callout line origin and destination should be populated by the
+         * callout subclass during rendering operations.
+         *
+         * \note the feature ID, layer ID and provider ID of the QgsCalloutPosition will be automatically populated.
+         *
+         * \since QGIS 3.20
+         */
+        void addCalloutPosition( const QgsCalloutPosition &position ) { return mPositions.push_back( position ); }
+
+        /**
+         * Returns the list of rendered callout positions.
+         *
+         * \since QGIS 3.20
+         */
+        QList< QgsCalloutPosition > positions() const { return mPositions; }
+
+      private:
+        //! Lazy initialized coordinate transform from original feature CRS to map CRS
+        mutable QgsCoordinateTransform mOriginalFeatureToMapTransform;
+
+        QList< QgsCalloutPosition > mPositions;
     };
 
     /**
@@ -238,7 +290,7 @@ class CORE_EXPORT QgsCallout
      * \warning A prior call to startRender() must have been made before calling this method, and
      * after all render() operations are complete a call to stopRender() must be made.
      */
-    void render( QgsRenderContext &context, QRectF rect, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext );
+    void render( QgsRenderContext &context, const QRectF &rect, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext );
 
     /**
      * Returns TRUE if the the callout is enabled.
@@ -368,13 +420,34 @@ class CORE_EXPORT QgsCallout
      * The \a calloutContext argument is used to specify additional contextual information about
      * how a callout is being rendered.
      */
-    virtual void draw( QgsRenderContext &context, QRectF bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext ) = 0;
+    virtual void draw( QgsRenderContext &context, const QRectF &bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext ) = 0;
 
     /**
      * Returns the anchor point geometry for a label with the given bounding box and \a anchor point mode.
-     * \since QGIS 3.14
+     * \deprecated QGIS 3.20 use calloutLabelPoint() instead
      */
-    QgsGeometry labelAnchorGeometry( QRectF bodyBoundingBox, const double angle, LabelAnchorPoint anchor ) const;
+    Q_DECL_DEPRECATED QgsGeometry labelAnchorGeometry( const QRectF &bodyBoundingBox, const double angle, LabelAnchorPoint anchor ) const SIP_DEPRECATED;
+
+    /**
+     * Returns the anchor point geometry for a label with the given bounding box and \a anchor point mode.
+     *
+     * The \a pinned argument will be set to TRUE if the callout label point is pinned (manually placed).
+     *
+     * \since QGIS 3.20
+     */
+    QgsGeometry calloutLabelPoint( const QRectF &bodyBoundingBox, double angle, LabelAnchorPoint anchor, QgsRenderContext &context, const QgsCalloutContext &calloutContext, bool &pinned ) const;
+
+    /**
+     * Calculates the direct line from a label geometry to an anchor geometry part, respecting the various
+     * callout settings which influence how the callout end should be placed in the anchor geometry.
+     *
+     * Returns a null geometry if the callout line cannot be calculated.
+     *
+     * The \a pinned argument will be set to TRUE if the callout anchor point is pinned (manually placed).
+     *
+     * \since QGIS 3.20
+     */
+    QgsGeometry calloutLineToPart( const QgsGeometry &labelGeometry, const QgsAbstractGeometry *partGeometry, QgsRenderContext &context, const QgsCalloutContext &calloutContext, bool &pinned ) const;
 
   private:
 
@@ -594,7 +667,16 @@ class CORE_EXPORT QgsSimpleLineCallout : public QgsCallout
     void setDrawCalloutToAllParts( bool drawToAllParts ) { mDrawCalloutToAllParts = drawToAllParts; }
 
   protected:
-    void draw( QgsRenderContext &context, QRectF bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCallout::QgsCalloutContext &calloutContext ) override;
+    void draw( QgsRenderContext &context, const QRectF &bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCallout::QgsCalloutContext &calloutContext ) override;
+
+    /**
+     * Creates a callout line between \a start and \a end in the desired style.
+     *
+     * The base class method returns a straight line.
+     *
+     * \since QGIS 3.20
+     */
+    virtual QgsCurve *createCalloutLine( const QgsPoint &start, const QgsPoint &end, QgsRenderContext &context, const QRectF &bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCallout::QgsCalloutContext &calloutContext ) const SIP_FACTORY;
 
   private:
 
@@ -653,7 +735,7 @@ class CORE_EXPORT QgsManhattanLineCallout : public QgsSimpleLineCallout
     QgsManhattanLineCallout *clone() const override;
 
   protected:
-    void draw( QgsRenderContext &context, QRectF bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCallout::QgsCalloutContext &calloutContext ) override;
+    QgsCurve *createCalloutLine( const QgsPoint &start, const QgsPoint &end, QgsRenderContext &context, const QRectF &bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCallout::QgsCalloutContext &calloutContext ) const override SIP_FACTORY;
 
   private:
 #ifdef SIP_RUN
@@ -662,6 +744,105 @@ class CORE_EXPORT QgsManhattanLineCallout : public QgsSimpleLineCallout
 #endif
 };
 
+
+/**
+ * \ingroup core
+ * \brief Draws curved lines as callouts.
+ *
+ * \since QGIS 3.20
+ */
+class CORE_EXPORT QgsCurvedLineCallout : public QgsSimpleLineCallout
+{
+  public:
+
+    /**
+     * Curve orientation
+     */
+    enum Orientation
+    {
+      Automatic, //!< Automatically choose most cartographically pleasing orientation based on label and callout arrangement
+      Clockwise, //!< Curve lines in a clockwise direction
+      CounterClockwise, //!< Curve lines in a counter-clockwise direction
+    };
+
+    QgsCurvedLineCallout();
+
+#ifndef SIP_RUN
+
+    /**
+     * Copy constructor.
+     */
+    QgsCurvedLineCallout( const QgsCurvedLineCallout &other );
+
+    QgsCurvedLineCallout &operator=( const QgsCurvedLineCallout & ) = delete;
+#endif
+
+    /**
+     * Creates a new QgsCurvedLineCallout, using the settings
+     * serialized in the \a properties map (corresponding to the output from
+     * QgsCurvedLineCallout::properties() ).
+     */
+    static QgsCallout *create( const QVariantMap &properties = QVariantMap(), const QgsReadWriteContext &context = QgsReadWriteContext() ) SIP_FACTORY;
+
+    QString type() const override;
+    QgsCurvedLineCallout *clone() const override;
+    QVariantMap properties( const QgsReadWriteContext &context ) const override;
+
+    /**
+     * Returns the callout line's curvature.
+     *
+     * The curvature is a percentage value (with typical ranges between 0.0 and 1.0), representing the overall curvature of the line.
+     *
+     * \see setCurvature()
+     */
+    double curvature() const;
+
+    /**
+     * Sets the callout line's \a curvature.
+     *
+     * The \a curvature is a percentage value (with typical ranges between 0.0 and 1.0), representing the overall curvature of the line.
+     *
+     * \see curvature()
+     */
+    void setCurvature( double curvature );
+
+    /**
+     * Returns the callout line's curve orientation.
+     *
+     * \see setOrientation()
+     */
+    Orientation orientation() const;
+
+    /**
+     * Sets the callout line's curve \a orientation.
+     *
+     * \see orientation()
+     */
+    void setOrientation( Orientation orientation );
+
+  protected:
+    QgsCurve *createCalloutLine( const QgsPoint &start, const QgsPoint &end, QgsRenderContext &context, const QRectF &bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext ) const override SIP_FACTORY;
+
+  private:
+#ifdef SIP_RUN
+    QgsCurvedLineCallout( const QgsCurvedLineCallout &other );
+    QgsCurvedLineCallout &operator=( const QgsCurvedLineCallout & );
+#endif
+
+    /**
+     * Decodes a string to an orientation value
+     */
+    static Orientation decodeOrientation( const QString &string );
+
+    /**
+     * Encodes an orientation string
+     */
+    static QString encodeOrientation( Orientation orientation );
+
+
+    Orientation mOrientation = Automatic;
+    double mCurvature = 0.1;
+};
 
 #endif // QGSCALLOUT_H
 

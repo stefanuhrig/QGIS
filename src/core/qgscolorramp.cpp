@@ -22,8 +22,11 @@
 #include "qgslogger.h"
 
 #include <algorithm>
+#include <random>
 
 #include <QTime>
+#include <QDir>
+#include <QFileInfo>
 
 //////////////
 
@@ -483,7 +486,9 @@ void QgsRandomColorRamp::setTotalColorCount( const int colorCount )
   }
 
   //lastly, shuffle color list
-  std::random_shuffle( mPrecalculatedColors.begin(), mPrecalculatedColors.end() );
+  std::random_device rd;
+  std::mt19937 g( rd() );
+  std::shuffle( mPrecalculatedColors.begin(), mPrecalculatedColors.end(), g );
 }
 
 QString QgsRandomColorRamp::type() const

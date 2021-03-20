@@ -95,6 +95,10 @@
 #include <QThreadPool>
 #include <QLocale>
 #include <QStyle>
+#include <QLibraryInfo>
+#include <QStandardPaths>
+#include <QRegularExpression>
+#include <QTextStream>
 
 #ifndef Q_OS_WIN
 #include <netinet/in.h>
@@ -118,9 +122,7 @@
 #include <sqlite3.h>
 #include <mutex>
 
-#if PROJ_VERSION_MAJOR>=6
 #include <proj.h>
-#endif
 
 
 #define CONN_POOL_MAX_CONCURRENT_CONNS      4
@@ -347,14 +349,6 @@ void QgsApplication::init( QString profileFolder )
   }
   *sSystemEnvVars() = systemEnvVarMap;
 
-#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,2,0)
-  if ( CPLGetConfigOption( "GDAL_NUM_THREADS", nullptr ) == nullptr )
-  {
-    CPLSetConfigOption( "GDAL_NUM_THREADS", "ALL_CPUS" );
-  }
-#endif
-
-#if PROJ_VERSION_MAJOR>=6
   // append local user-writable folder as a proj search path
   QStringList currentProjSearchPaths = QgsProjUtils::searchPaths();
   currentProjSearchPaths.append( qgisSettingsDirPath() + QStringLiteral( "proj" ) );
@@ -378,7 +372,6 @@ void QgsApplication::init( QString profileFolder )
     CPLFree( newPaths[i] );
   }
   delete [] newPaths;
-#endif // PROJ_VERSION_MAJOR>=6
 
   // allow Qt to search for Qt plugins (e.g. sqldrivers) in our plugin directory
   QCoreApplication::addLibraryPath( pluginPath() );
@@ -1039,19 +1032,11 @@ QString QgsApplication::srsDatabaseFilePath()
 {
   if ( ABISYM( mRunningFromBuildDir ) )
   {
-#if PROJ_VERSION_MAJOR>=6
     QString tempCopy = QDir::tempPath() + "/srs6.db";
-#else
-    QString tempCopy = QDir::tempPath() + "/srs.db";
-#endif
 
     if ( !QFile( tempCopy ).exists() )
     {
-#if PROJ_VERSION_MAJOR>=6
       QFile f( buildSourcePath() + "/resources/srs6.db" );
-#else
-      QFile f( buildSourcePath() + "/resources/srs.db" );
-#endif
       if ( !f.copy( tempCopy ) )
       {
         qFatal( "Could not create temporary copy" );
@@ -1097,7 +1082,7 @@ QStringList QgsApplication::svgPaths()
       if ( !paths.contains( path ) )
         paths.append( path );
     }
-    for ( const QString &path : qgis::as_const( *sDefaultSvgPaths() ) )
+    for ( const QString &path : std::as_const( *sDefaultSvgPaths() ) )
     {
       if ( !paths.contains( path ) )
         paths.append( path );

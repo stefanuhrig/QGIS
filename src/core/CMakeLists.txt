@@ -45,6 +45,7 @@ set(QGIS_CORE_SRCS
   symbology/qgscolorbrewerpalette.cpp
   symbology/qgscptcityarchive.cpp
   symbology/qgsellipsesymbollayer.cpp
+  symbology/qgsembeddedsymbolrenderer.cpp
   symbology/qgsfeaturerenderergenerator.cpp
   symbology/qgsfillsymbollayer.cpp
   symbology/qgsgeometrygeneratorsymbollayer.cpp
@@ -357,6 +358,7 @@ set(QGIS_CORE_SRCS
   qgsmaphittest.cpp
   qgsmaplayer.cpp
   qgsmaplayerelevationproperties.cpp
+  qgsmaplayerfactory.cpp
   qgsmaplayerlegend.cpp
   qgsmaplayermodel.cpp
   qgsmaplayerproxymodel.cpp
@@ -424,6 +426,7 @@ set(QGIS_CORE_SRCS
   qgsruntimeprofiler.cpp
   qgsscalecalculator.cpp
   qgsscaleutils.cpp
+  qgsshapegenerator.cpp
   qgssimplifymethod.cpp
   qgssnappingutils.cpp
   qgsspatialindex.cpp
@@ -647,6 +650,7 @@ set(QGIS_CORE_SRCS
   labeling/qgslabelfeature.cpp
   labeling/qgslabelingengine.cpp
   labeling/qgslabelingenginesettings.cpp
+  labeling/qgslabelingresults.cpp
   labeling/qgslabellinesettings.cpp
   labeling/qgslabelobstaclesettings.cpp
   labeling/qgslabelsearchtree.cpp
@@ -951,6 +955,7 @@ set(QGIS_CORE_HDRS
   qgsmaphittest.h
   qgsmaplayer.h
   qgsmaplayerdependency.h
+  qgsmaplayerfactory.h
   qgsmaplayerlegend.h
   qgsmaplayermodel.h
   qgsmaplayerproxymodel.h
@@ -1026,6 +1031,7 @@ set(QGIS_CORE_HDRS
   qgsscalecalculator.h
   qgsscaleutils.h
   qgssettings.h
+  qgsshapegenerator.h
   qgssimplifymethod.h
   qgssnappingconfig.h
   qgssnappingutils.h
@@ -1211,12 +1217,15 @@ set(QGIS_CORE_HDRS
   gps/qgsgpsdetector.h
   gps/qgsnmeaconnection.h
 
+  labeling/qgscalloutposition.h
   labeling/qgslabelfeature.h
   labeling/qgslabeling.h
   labeling/qgslabelingengine.h
   labeling/qgslabelingenginesettings.h
+  labeling/qgslabelingresults.h
   labeling/qgslabellinesettings.h
   labeling/qgslabelobstaclesettings.h
+  labeling/qgslabelposition.h
   labeling/qgslabelsearchtree.h
   labeling/qgslabelthinningsettings.h
   labeling/qgspallabeling.h
@@ -1501,6 +1510,7 @@ set(QGIS_CORE_HDRS
   symbology/qgscolorbrewerpalette.h
   symbology/qgscptcityarchive.h
   symbology/qgsellipsesymbollayer.h
+  symbology/qgsembeddedsymbolrenderer.h
   symbology/qgsfeaturerenderergenerator.h
   symbology/qgsfillsymbollayer.h
   symbology/qgsgeometrygeneratorsymbollayer.h
@@ -1722,6 +1732,9 @@ set(IMAGE_RCCS ../../images/images.qrc)
 #############################################################
 # qgis_core library
 add_library(qgis_core ${LIBRARY_TYPE} ${QGIS_CORE_SRCS} ${QGIS_CORE_HDRS} ${QGIS_CORE_PRIVATE_HDRS} ${IMAGE_RCCS})
+
+# require c++17
+target_compile_features(qgis_core PRIVATE cxx_std_17)
 
 target_include_directories(qgis_core SYSTEM PUBLIC
   ${QT_INCLUDE_DIR}

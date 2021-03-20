@@ -27,6 +27,8 @@
 #include "qgsrasterfilewriter.h"
 #include "qgslinestring.h"
 
+#include <QTextStream>
+
 ///@cond PRIVATE
 
 
@@ -414,7 +416,7 @@ QgsGeometry QgsExportMeshFacesAlgorithm::meshElement( int index ) const
   QVector<QgsPoint> vertices( face.size() );
   for ( int i = 0; i < face.size(); ++i )
     vertices[i] = mNativeMesh.vertex( face.at( i ) );
-  std::unique_ptr<QgsPolygon> polygon = qgis::make_unique<QgsPolygon>();
+  std::unique_ptr<QgsPolygon> polygon = std::make_unique<QgsPolygon>();
   polygon->setExteriorRing( new QgsLineString( vertices ) );
   return QgsGeometry( polygon.release() );
 }

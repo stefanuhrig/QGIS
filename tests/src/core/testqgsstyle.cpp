@@ -17,6 +17,7 @@
 #include <QStringList>
 #include <QApplication>
 #include <QFileInfo>
+#include <QSignalSpy>
 
 // clazy:excludeall=qcolor-from-literal
 
@@ -271,7 +272,7 @@ void TestStyle::testCreateColorRamps()
             << QStringLiteral( "test_gradient" )
             << QStringLiteral( "test_random" ) );
 
-  std::unique_ptr< QgsCptCityColorRamp > cc4Ramp = qgis::make_unique< QgsCptCityColorRamp >( QStringLiteral( "grass/byr" ), QString() );
+  std::unique_ptr< QgsCptCityColorRamp > cc4Ramp = std::make_unique< QgsCptCityColorRamp >( QStringLiteral( "grass/byr" ), QString() );
   QgsStyleColorRampEntity entity( cc4Ramp.get() );
   QVERIFY( mStyle->addEntity( "test_cc4", &entity, true ) );
 

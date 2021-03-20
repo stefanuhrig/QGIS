@@ -88,6 +88,7 @@ RUN  apt-get update \
     python3-pyqt5.qsci \
     python3-pyqt5.qtsql \
     python3-pyqt5.qtsvg \
+    python3-pyqt5.qtwebkit \
     python3-sip \
     python3-sip-dev \
     python3-termcolor \
@@ -97,6 +98,7 @@ RUN  apt-get update \
     qt3d-defaultgeometryloader-plugin \
     qt3d-gltfsceneio-plugin \
     qt3d-scene2d-plugin \
+    qt5-image-formats-plugins \
     qt5keychain-dev \
     qtbase5-dev \
     qtdeclarative5-dev-tools \

@@ -20,6 +20,8 @@
 #include "qgsgeometry.h"
 #include "qgsfeaturerequest.h"
 
+#include <QRegularExpression>
+
 const char *QgsExpressionNodeBinaryOperator::BINARY_OPERATOR_TEXT[] =
 {
   // this must correspond (number and order of element) to the declaration of the enum BinaryOperator
@@ -833,7 +835,112 @@ QgsExpressionNode *QgsExpressionNodeBinaryOperator::clone() const
 
 bool QgsExpressionNodeBinaryOperator::isStatic( QgsExpression *parent, const QgsExpressionContext *context ) const
 {
-  return mOpLeft->isStatic( parent, context ) && mOpRight->isStatic( parent, context );
+  const bool leftStatic = mOpLeft->isStatic( parent, context );
+  const bool rightStatic = mOpRight->isStatic( parent, context );
+
+  if ( leftStatic && rightStatic )
+    return true;
+
+  // special logic for certain ops...
+  switch ( mOp )
+  {
+    case QgsExpressionNodeBinaryOperator::boOr:
+    {
+      // if either node is static AND evaluates to TRUE, then the result will ALWAYS be true regardless
+      // of the value of the other node!
+      if ( leftStatic )
+      {
+        mOpLeft->prepare( parent, context );
+        if ( mOpLeft->hasCachedStaticValue() )
+        {
+          QgsExpressionUtils::TVL tvl = QgsExpressionUtils::getTVLValue( mOpLeft->cachedStaticValue(), parent );
+          if ( !parent->hasEvalError() && tvl == QgsExpressionUtils::True )
+          {
+            mCachedStaticValue = true;
+            mHasCachedValue = true;
+            return true;
+          }
+        }
+      }
+      else if ( rightStatic )
+      {
+        mOpRight->prepare( parent, context );
+        if ( mOpRight->hasCachedStaticValue() )
+        {
+          QgsExpressionUtils::TVL tvl = QgsExpressionUtils::getTVLValue( mOpRight->cachedStaticValue(), parent );
+          if ( !parent->hasEvalError() && tvl == QgsExpressionUtils::True )
+          {
+            mCachedStaticValue = true;
+            mHasCachedValue = true;
+            return true;
+          }
+        }
+      }
+
+      break;
+    }
+    case QgsExpressionNodeBinaryOperator::boAnd:
+    {
+      // if either node is static AND evaluates to FALSE, then the result will ALWAYS be false regardless
+      // of the value of the other node!
+
+      if ( leftStatic )
+      {
+        mOpLeft->prepare( parent, context );
+        if ( mOpLeft->hasCachedStaticValue() )
+        {
+          QgsExpressionUtils::TVL tvl = QgsExpressionUtils::getTVLValue( mOpLeft->cachedStaticValue(), parent );
+          if ( !parent->hasEvalError() && tvl == QgsExpressionUtils::False )
+          {
+            mCachedStaticValue = false;
+            mHasCachedValue = true;
+            return true;
+          }
+        }
+      }
+      else if ( rightStatic )
+      {
+        mOpRight->prepare( parent, context );
+        if ( mOpRight->hasCachedStaticValue() )
+        {
+          QgsExpressionUtils::TVL tvl = QgsExpressionUtils::getTVLValue( mOpRight->cachedStaticValue(), parent );
+          if ( !parent->hasEvalError() && tvl == QgsExpressionUtils::False )
+          {
+            mCachedStaticValue = false;
+            mHasCachedValue = true;
+            return true;
+          }
+        }
+      }
+
+      break;
+    }
+
+    case QgsExpressionNodeBinaryOperator::boEQ:
+    case QgsExpressionNodeBinaryOperator::boNE:
+    case QgsExpressionNodeBinaryOperator::boLE:
+    case QgsExpressionNodeBinaryOperator::boGE:
+    case QgsExpressionNodeBinaryOperator::boLT:
+    case QgsExpressionNodeBinaryOperator::boGT:
+    case QgsExpressionNodeBinaryOperator::boRegexp:
+    case QgsExpressionNodeBinaryOperator::boLike:
+    case QgsExpressionNodeBinaryOperator::boNotLike:
+    case QgsExpressionNodeBinaryOperator::boILike:
+    case QgsExpressionNodeBinaryOperator::boNotILike:
+    case QgsExpressionNodeBinaryOperator::boIs:
+    case QgsExpressionNodeBinaryOperator::boIsNot:
+    case QgsExpressionNodeBinaryOperator::boPlus:
+    case QgsExpressionNodeBinaryOperator::boMinus:
+    case QgsExpressionNodeBinaryOperator::boMul:
+    case QgsExpressionNodeBinaryOperator::boDiv:
+    case QgsExpressionNodeBinaryOperator::boIntDiv:
+    case QgsExpressionNodeBinaryOperator::boMod:
+    case QgsExpressionNodeBinaryOperator::boPow:
+    case QgsExpressionNodeBinaryOperator::boConcat:
+      break;
+  }
+
+  return false;
 }
 
 //
@@ -1434,7 +1541,7 @@ QgsExpressionNode::NodeType QgsExpressionNodeCondition::nodeType() const
 
 QVariant QgsExpressionNodeCondition::evalNode( QgsExpression *parent, const QgsExpressionContext *context )
 {
-  for ( WhenThen *cond : qgis::as_const( mConditions ) )
+  for ( WhenThen *cond : std::as_const( mConditions ) )
   {
     QVariant vWhen = cond->mWhenExp->eval( parent, context );
     QgsExpressionUtils::TVL tvl = QgsExpressionUtils::getTVLValue( vWhen, parent );
@@ -1461,7 +1568,7 @@ QVariant QgsExpressionNodeCondition::evalNode( QgsExpression *parent, const QgsE
 bool QgsExpressionNodeCondition::prepareNode( QgsExpression *parent, const QgsExpressionContext *context )
 {
   bool res;
-  for ( WhenThen *cond : qgis::as_const( mConditions ) )
+  for ( WhenThen *cond : std::as_const( mConditions ) )
   {
     res = cond->mWhenExp->prepare( parent, context )
           & cond->mThenExp->prepare( parent, context );

@@ -214,6 +214,8 @@
     <addaction name="mActionPasteLayer"/>
     <addaction name="separator"/>
     <addaction name="mActionOpenTable"/>
+    <addaction name="mActionOpenTableSelected"/>
+    <addaction name="mActionOpenTableVisible"/>
     <addaction name="mActionToggleEditing"/>
     <addaction name="mActionSaveLayerEdits"/>
     <addaction name="mActionAllEdits"/>
@@ -519,7 +521,6 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="mActionDigitizeWithCurve"/>
    <addaction name="mActionRotateFeature"/>
    <addaction name="mActionScaleFeature"/>
    <addaction name="mActionSimplifyFeature"/>
@@ -581,7 +582,6 @@
     <bool>true</bool>
    </attribute>
    <addaction name="mActionIdentify"/>
-   <addaction name="mActionOpenTable"/>
    <addaction name="mActionOpenFieldCalc"/>
    <addaction name="mActionStatisticalSummary"/>
    <addaction name="mActionMapTips"/>
@@ -1679,6 +1679,30 @@
     <string>F6</string>
    </property>
   </action>
+  <action name="mActionOpenTableSelected">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionOpenTableSelected.svg</normaloff>:/images/themes/default/mActionOpenTableSelected.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Open Attribute Table (Selected items)</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+F6</string>
+   </property>
+  </action>
+  <action name="mActionOpenTableVisible">
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionOpenTableVisible.svg</normaloff>:/images/themes/default/mActionOpenTableVisible.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Open Attribute Table (Visible items)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F6</string>
+   </property>
+  </action>
   <action name="mActionToggleEditing">
    <property name="checkable">
     <bool>true</bool>
@@ -1973,10 +1997,10 @@
      <normaloff>:/images/themes/default/mActionMoveLabel.svg</normaloff>:/images/themes/default/mActionMoveLabel.svg</iconset>
    </property>
    <property name="text">
-    <string>Move Label and Diagram</string>
+    <string>Move Label, Diagram or Callout</string>
    </property>
    <property name="toolTip">
-    <string>Move a Label or Diagram
+    <string>Move a Label, Diagram or Callout
 Acts on all layers.</string>
    </property>
   </action>
@@ -2293,11 +2317,11 @@ Acts on all layers.</string>
      <normaloff>:/images/themes/default/mActionShowPinnedLabels.svg</normaloff>:/images/themes/default/mActionShowPinnedLabels.svg</iconset>
    </property>
    <property name="text">
-    <string>Highlight Pinned Labels and Diagrams</string>
+    <string>Highlight Pinned Labels, Diagrams and Callouts</string>
    </property>
    <property name="toolTip">
-    <string>Highlight Pinned Labels and Diagrams
-Shows highlight rectangles around labels and diagrams which are fixed in place, e.g. due to manual placement.</string>
+    <string>Highlight Pinned Labels, Diagrams and Callouts
+Shows highlight rectangles around labels, diagrams and callout points which are fixed in place, e.g. due to manual placement.</string>
    </property>
   </action>
   <action name="mActionNewBlankProject">
@@ -3443,7 +3467,7 @@ Shows placeholders for labels which could not be placed, e.g. due to overlaps wi
      <normaloff>:/images/themes/default/mActionDigitizeWithCurve.svg</normaloff>:/images/themes/default/mActionDigitizeWithCurve.svg</iconset>
    </property>
    <property name="text">
-    <string>Digitize with curve</string>
+    <string>Digitize with Curve</string>
    </property>
    <property name="toolTip">
     <string>Digitize with curve</string>
@@ -3459,6 +3483,24 @@ Shows placeholders for labels which could not be placed, e.g. due to overlaps wi
    </property>
    <property name="text">
     <string>Add Point Cloud Layer...</string>
+   </property>
+  </action>
+  <action name="mActionStreamDigitize">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../images/images.qrc">
+     <normaloff>:/images/themes/default/mActionStreamingDigitize.svg</normaloff>:/images/themes/default/mActionStreamingDigitize.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Stream Digitizing</string>
+   </property>
+   <property name="toolTip">
+    <string>Toggles stream digitizing mode</string>
    </property>
   </action>
  </widget>
