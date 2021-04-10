@@ -24,11 +24,13 @@
 #include "qgspropertycollection.h"
 #include "qgsmapunitscale.h"
 #include "qgscalloutposition.h"
+#include "qgsmargins.h"
 #include <QString>
 #include <QRectF>
 #include <memory>
 
 class QgsLineSymbol;
+class QgsFillSymbol;
 class QgsGeometry;
 class QgsRenderContext;
 
@@ -61,6 +63,10 @@ class CORE_EXPORT QgsCallout
     {
       sipType = sipType_QgsCurvedLineCallout;
     }
+    else if ( sipCpp->type() == "balloon" && dynamic_cast<QgsBalloonCallout *>( sipCpp ) != NULL )
+    {
+      sipType = sipType_QgsBalloonCallout;
+    }
     else
     {
       sipType = 0;
@@ -85,6 +91,9 @@ class CORE_EXPORT QgsCallout
       DestinationY, //!< Y-coordinate of callout destination (feature anchor) (since QGIS 3.20)
       Curvature, //!< Curvature of curved line callouts (since QGIS 3.20)
       Orientation, //!< Orientation of curved line callouts (since QGIS 3.20)
+      Margins, //!< Margin from text (since QGIS 3.20)
+      WedgeWidth, //!< Balloon callout wedge width (since QGIS 3.20)
+      CornerRadius, //!< Balloon callout corner radius (since QGIS 3.20)
     };
 
     //! Options for draw order (stacking) of callouts
@@ -843,6 +852,287 @@ class CORE_EXPORT QgsCurvedLineCallout : public QgsSimpleLineCallout
     Orientation mOrientation = Automatic;
     double mCurvature = 0.1;
 };
+
+
+/**
+ * \ingroup core
+ * \brief A cartoon talking bubble callout style.
+ *
+ * \since QGIS 3.20
+ */
+class CORE_EXPORT QgsBalloonCallout : public QgsCallout
+{
+  public:
+
+    QgsBalloonCallout();
+    ~QgsBalloonCallout() override;
+
+#ifndef SIP_RUN
+
+    /**
+     * Copy constructor.
+     */
+    QgsBalloonCallout( const QgsBalloonCallout &other );
+    QgsBalloonCallout &operator=( const QgsBalloonCallout & ) = delete;
+#endif
+
+    /**
+     * Creates a new QgsBalloonCallout, using the settings
+     * serialized in the \a properties map (corresponding to the output from
+     * QgsBalloonCallout::properties() ).
+     */
+    static QgsCallout *create( const QVariantMap &properties = QVariantMap(), const QgsReadWriteContext &context = QgsReadWriteContext() ) SIP_FACTORY;
+
+    QString type() const override;
+    QgsBalloonCallout *clone() const override;
+    QVariantMap properties( const QgsReadWriteContext &context ) const override;
+    void readProperties( const QVariantMap &props, const QgsReadWriteContext &context ) override;
+    void startRender( QgsRenderContext &context ) override;
+    void stopRender( QgsRenderContext &context ) override;
+    QSet< QString > referencedFields( const QgsRenderContext &context ) const override;
+
+    /**
+     * Returns the fill symbol used to render the callout.
+     *
+     * Ownership is not transferred.
+     *
+     * \see setFillSymbol()
+     */
+    QgsFillSymbol *fillSymbol();
+
+    /**
+     * Sets the fill \a symbol used to render the callout. Ownership of \a symbol is
+     * transferred to the callout.
+     *
+     * \see fillSymbol()
+     */
+    void setFillSymbol( QgsFillSymbol *symbol SIP_TRANSFER );
+
+    /**
+     * Returns the offset distance from the anchor point at which to start the line. Units are specified through offsetFromAnchorUnit().
+     * \see setOffsetFromAnchor()
+     * \see offsetFromAnchorUnit()
+     */
+    double offsetFromAnchor() const { return mOffsetFromAnchorDistance; }
+
+    /**
+     * Sets the offset \a distance from the anchor point at which to start the line. Units are specified through setOffsetFromAnchorUnit().
+     * \see offsetFromAnchor()
+     * \see setOffsetFromAnchorUnit()
+     */
+    void setOffsetFromAnchor( double distance ) { mOffsetFromAnchorDistance = distance; }
+
+    /**
+     * Sets the \a unit for the offset from anchor distance.
+     * \see offsetFromAnchor()
+     * \see setOffsetFromAnchor()
+    */
+    void setOffsetFromAnchorUnit( QgsUnitTypes::RenderUnit unit ) { mOffsetFromAnchorUnit = unit; }
+
+    /**
+     * Returns the units for the offset from anchor point.
+     * \see setOffsetFromAnchorUnit()
+     * \see offsetFromAnchor()
+    */
+    QgsUnitTypes::RenderUnit offsetFromAnchorUnit() const { return mOffsetFromAnchorUnit; }
+
+    /**
+     * Sets the map unit \a scale for the offset from anchor.
+     * \see offsetFromAnchorMapUnitScale()
+     * \see setOffsetFromAnchorUnit()
+     * \see setOffsetFromAnchor()
+     */
+    void setOffsetFromAnchorMapUnitScale( const QgsMapUnitScale &scale ) { mOffsetFromAnchorScale = scale; }
+
+    /**
+     * Returns the map unit scale for the offset from anchor.
+     * \see setOffsetFromAnchorMapUnitScale()
+     * \see offsetFromAnchorUnit()
+     * \see offsetFromAnchor()
+     */
+    const QgsMapUnitScale &offsetFromAnchorMapUnitScale() const { return mOffsetFromAnchorScale; }
+
+    /**
+     * Returns the margins between the outside of the callout frame and the label's bounding rectangle.
+     *
+     * Units are retrieved via marginsUnit()
+     *
+     * \note Negative margins are acceptable.
+     *
+     * \see setMargins()
+     * \see marginsUnit()
+     */
+    const QgsMargins &margins() const { return mMargins; }
+
+    /**
+     * Sets the \a margins between the outside of the callout frame and the label's bounding rectangle.
+     *
+     * Units are set via setMarginsUnit()
+     *
+     * \note Negative margins are acceptable.
+     *
+     * \see margins()
+     * \see setMarginsUnit()
+     */
+    void setMargins( const QgsMargins &margins ) { mMargins = margins; }
+
+    /**
+     * Sets the \a unit for the margins between the outside of the callout frame and the label's bounding rectangle.
+     *
+     * \see margins()
+     * \see marginsUnit()
+    */
+    void setMarginsUnit( QgsUnitTypes::RenderUnit unit ) { mMarginUnit = unit; }
+
+    /**
+     * Returns the units for the margins between the outside of the callout frame and the label's bounding rectangle.
+     *
+     * \see setMarginsUnit()
+     * \see margins()
+    */
+    QgsUnitTypes::RenderUnit marginsUnit() const { return mMarginUnit; }
+
+    /**
+     * Returns the width of the wedge shape at the side it connects with the label.
+     *
+     * Units are specified through wedgeWidthUnit().
+     *
+     * \see setWedgeWidth()
+     * \see wedgeWidthUnit()
+     */
+    double wedgeWidth() const { return mWedgeWidth; }
+
+    /**
+     * Sets the \a width of the wedge shape at the side it connects with the label.
+     *
+     * Units are specified through setWedgeWidthUnit().
+     *
+     * \see wedgeWidth()
+     * \see setWedgeWidthUnit()
+     */
+    void setWedgeWidth( double width ) { mWedgeWidth = width; }
+
+    /**
+     * Sets the \a unit for the wedge width.
+     *
+     * \see wedgeWidthUnit()
+     * \see setWedgeWidth()
+    */
+    void setWedgeWidthUnit( QgsUnitTypes::RenderUnit unit ) { mWedgeWidthUnit = unit; }
+
+    /**
+     * Returns the units for the wedge width.
+     *
+     * \see setWedgeWidthUnit()
+     * \see wedgeWidth()
+    */
+    QgsUnitTypes::RenderUnit wedgeWidthUnit() const { return mWedgeWidthUnit; }
+
+    /**
+     * Sets the map unit \a scale for the wedge width.
+     *
+     * \see wedgeWidthMapUnitScale()
+     * \see setWedgeWidthUnit()
+     * \see setWedgeWidth()
+     */
+    void setWedgeWidthMapUnitScale( const QgsMapUnitScale &scale ) { mWedgeWidthScale = scale; }
+
+    /**
+     * Returns the map unit scale for the wedge width.
+     *
+     * \see setWedgeWidthMapUnitScale()
+     * \see wedgeWidthUnit()
+     * \see wedgeWidth()
+     */
+    const QgsMapUnitScale &wedgeWidthMapUnitScale() const { return mWedgeWidthScale; }
+
+    /**
+     * Returns the corner radius of the balloon shapes.
+     *
+     * Units are specified through wedgeWidthUnit().
+     *
+     * \see setCornerRadius()
+     * \see cornerRadiusUnit()
+     */
+    double cornerRadius() const { return mCornerRadius; }
+
+    /**
+     * Sets the \a radius of the corners for the balloon shapes.
+     *
+     * Units are specified through setCornerRadiusUnit().
+     *
+     * \see cornerRadius()
+     * \see setCornerRadiusUnit()
+     */
+    void setCornerRadius( double radius ) { mCornerRadius = radius; }
+
+    /**
+     * Sets the \a unit for the corner radius.
+     *
+     * \see cornerRadiusUnit()
+     * \see setCornerRadius()
+    */
+    void setCornerRadiusUnit( QgsUnitTypes::RenderUnit unit ) { mCornerRadiusUnit = unit; }
+
+    /**
+     * Returns the units for the corner radius.
+     *
+     * \see setCornerRadiusUnit()
+     * \see cornerRadius()
+    */
+    QgsUnitTypes::RenderUnit cornerRadiusUnit() const { return mCornerRadiusUnit; }
+
+    /**
+     * Sets the map unit \a scale for the corner radius.
+     *
+     * \see cornerRadiusMapUnitScale()
+     * \see setCornerRadiusUnit()
+     * \see setCornerRadius()
+     */
+    void setCornerRadiusMapUnitScale( const QgsMapUnitScale &scale ) { mCornerRadiusScale = scale; }
+
+    /**
+     * Returns the map unit scale for the corner radius.
+     *
+     * \see setCornerRadiusMapUnitScale()
+     * \see cornerRadiusUnit()
+     * \see cornerRadius()
+     */
+    const QgsMapUnitScale &cornerRadiusMapUnitScale() const { return mCornerRadiusScale; }
+
+
+  protected:
+    void draw( QgsRenderContext &context, const QRectF &bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCallout::QgsCalloutContext &calloutContext ) override;
+
+  private:
+
+    QPolygonF getPoints( QgsRenderContext &context, QgsPointXY origin, QRectF rect ) const;
+
+#ifdef SIP_RUN
+    QgsBalloonCallout( const QgsBalloonCallout &other );
+    QgsBalloonCallout &operator=( const QgsBalloonCallout & );
+#endif
+
+    std::unique_ptr< QgsFillSymbol > mFillSymbol;
+
+    double mOffsetFromAnchorDistance = 0;
+    QgsUnitTypes::RenderUnit mOffsetFromAnchorUnit = QgsUnitTypes::RenderMillimeters;
+    QgsMapUnitScale mOffsetFromAnchorScale;
+
+    QgsMargins mMargins;
+    QgsUnitTypes::RenderUnit mMarginUnit = QgsUnitTypes::RenderMillimeters;
+
+    double mWedgeWidth = 2.64;
+    QgsUnitTypes::RenderUnit mWedgeWidthUnit = QgsUnitTypes::RenderMillimeters;
+    QgsMapUnitScale mWedgeWidthScale;
+
+    double mCornerRadius = 0.0;
+    QgsUnitTypes::RenderUnit mCornerRadiusUnit = QgsUnitTypes::RenderMillimeters;
+    QgsMapUnitScale mCornerRadiusScale;
+
+};
+
+
 
 #endif // QGSCALLOUT_H
 

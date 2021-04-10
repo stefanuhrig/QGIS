@@ -16,8 +16,11 @@
  ***************************************************************************/
 
 #include "qgis.h"
+#include "qgslogger.h"
+#include "qgsproviderregistry.h"
 #include "qgseptprovider.h"
 #include "qgseptpointcloudindex.h"
+#include "qgsremoteeptpointcloudindex.h"
 #include "qgseptdataitems.h"
 #include "qgsruntimeprofiler.h"
 #include "qgsapplication.h"
@@ -34,8 +37,12 @@ QgsEptProvider::QgsEptProvider(
   const QgsDataProvider::ProviderOptions &options,
   QgsDataProvider::ReadFlags flags )
   : QgsPointCloudDataProvider( uri, options, flags )
-  , mIndex( new QgsEptPointCloudIndex )
 {
+  if ( uri.startsWith( QStringLiteral( "http" ), Qt::CaseSensitivity::CaseInsensitive ) )
+    mIndex.reset( new QgsRemoteEptPointCloudIndex );
+  else
+    mIndex.reset( new QgsEptPointCloudIndex );
+
   std::unique_ptr< QgsScopedRuntimeProfile > profile;
   if ( QgsApplication::profiler()->groupIsActive( QStringLiteral( "projectload" ) ) )
     profile = std::make_unique< QgsScopedRuntimeProfile >( tr( "Open data source" ), QStringLiteral( "projectload" ) );
@@ -80,7 +87,7 @@ QgsPointCloudIndex *QgsEptProvider::index() const
   return mIndex.get();
 }
 
-int QgsEptProvider::pointCount() const
+qint64 QgsEptProvider::pointCount() const
 {
   return mIndex->pointCount();
 }

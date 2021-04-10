@@ -30,6 +30,7 @@
 #include "qgsmultipoint.h"
 #include "qgslegendpatchshape.h"
 #include "qgsstyle.h"
+#include "qgsexpressioncontextutils.h"
 
 #include <QSize>
 #include <QPainter>
@@ -117,14 +118,16 @@ void QgsSymbolLayer::setDataDefinedProperty( QgsSymbolLayer::Property key, const
   dataDefinedProperties().setProperty( key, property );
 }
 
-void QgsSymbolLayer::startFeatureRender( const QgsFeature &, QgsRenderContext & )
+void QgsSymbolLayer::startFeatureRender( const QgsFeature &feature, QgsRenderContext &context )
 {
-
+  if ( subSymbol() )
+    subSymbol()->startFeatureRender( feature, context );
 }
 
-void QgsSymbolLayer::stopFeatureRender( const QgsFeature &, QgsRenderContext & )
+void QgsSymbolLayer::stopFeatureRender( const QgsFeature &feature, QgsRenderContext &context )
 {
-
+  if ( subSymbol() )
+    subSymbol()->stopFeatureRender( feature, context );
 }
 
 bool QgsSymbolLayer::writeDxf( QgsDxfExport &e, double mmMapUnitScaleFactor, const QString &layerName, QgsSymbolRenderContext &context, QPointF shift ) const
@@ -691,12 +694,24 @@ void QgsLineSymbolLayer::drawPreviewIcon( QgsSymbolRenderContext &context, QSize
 
 void QgsLineSymbolLayer::renderPolygonStroke( const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context )
 {
+  QgsExpressionContextScope *scope = nullptr;
+  std::unique_ptr< QgsExpressionContextScopePopper > scopePopper;
+  if ( hasDataDefinedProperties() )
+  {
+    scope = new QgsExpressionContextScope();
+    scopePopper = std::make_unique< QgsExpressionContextScopePopper >( context.renderContext().expressionContext(), scope );
+  }
+
   switch ( mRingFilter )
   {
     case AllRings:
     case ExteriorRingOnly:
+    {
+      if ( scope )
+        scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_RING_NUM, 0, true ) );
       renderPolyline( points, context );
       break;
+    }
     case InteriorRingsOnly:
       break;
   }
@@ -708,8 +723,15 @@ void QgsLineSymbolLayer::renderPolygonStroke( const QPolygonF &points, const QVe
       case AllRings:
       case InteriorRingsOnly:
       {
+        int ringIndex = 1;
         for ( const QPolygonF &ring : std::as_const( *rings ) )
+        {
+          if ( scope )
+            scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_RING_NUM, ringIndex, true ) );
+
           renderPolyline( ring, context );
+          ringIndex++;
+        }
       }
       break;
       case ExteriorRingOnly:

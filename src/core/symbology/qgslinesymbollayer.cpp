@@ -279,6 +279,14 @@ void QgsSimpleLineSymbolLayer::renderPolygonStroke( const QPolygonF &points, con
     return;
   }
 
+  QgsExpressionContextScope *scope = nullptr;
+  std::unique_ptr< QgsExpressionContextScopePopper > scopePopper;
+  if ( hasDataDefinedProperties() )
+  {
+    scope = new QgsExpressionContextScope();
+    scopePopper = std::make_unique< QgsExpressionContextScopePopper >( context.renderContext().expressionContext(), scope );
+  }
+
   if ( mDrawInsidePolygon )
     p->save();
 
@@ -307,6 +315,9 @@ void QgsSimpleLineSymbolLayer::renderPolygonStroke( const QPolygonF &points, con
         p->setClipPath( clipPath, Qt::IntersectClip );
       }
 
+      if ( scope )
+        scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_RING_NUM, 0, true ) );
+
       renderPolyline( points, context );
     }
     break;
@@ -323,8 +334,15 @@ void QgsSimpleLineSymbolLayer::renderPolygonStroke( const QPolygonF &points, con
       case InteriorRingsOnly:
       {
         mOffset = -mOffset; // invert the offset for rings!
+        int ringIndex = 1;
         for ( const QPolygonF &ring : std::as_const( *rings ) )
+        {
+          if ( scope )
+            scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_RING_NUM, ringIndex, true ) );
+
           renderPolyline( ring, context );
+          ringIndex++;
+        }
         mOffset = -mOffset;
       }
       break;
@@ -1310,12 +1328,25 @@ void QgsTemplatedLineSymbolLayerBase::renderPolygonStroke( const QPolygonF &poin
     context.renderContext().setGeometry( curvePolygon->exteriorRing() );
   }
 
+  QgsExpressionContextScope *scope = nullptr;
+  std::unique_ptr< QgsExpressionContextScopePopper > scopePopper;
+  if ( hasDataDefinedProperties() )
+  {
+    scope = new QgsExpressionContextScope();
+    scopePopper = std::make_unique< QgsExpressionContextScopePopper >( context.renderContext().expressionContext(), scope );
+  }
+
   switch ( mRingFilter )
   {
     case AllRings:
     case ExteriorRingOnly:
+    {
+      if ( scope )
+        scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_RING_NUM, 0, true ) );
+
       renderPolyline( points, context );
       break;
+    }
     case InteriorRingsOnly:
       break;
   }
@@ -1334,6 +1365,9 @@ void QgsTemplatedLineSymbolLayerBase::renderPolygonStroke( const QPolygonF &poin
           {
             context.renderContext().setGeometry( curvePolygon->interiorRing( i ) );
           }
+          if ( scope )
+            scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_RING_NUM, i + 1, true ) );
+
           renderPolyline( rings->at( i ), context );
         }
         mOffset = -mOffset;
@@ -1961,7 +1995,7 @@ void QgsTemplatedLineSymbolLayerBase::renderOffsetVertexAlongLine( const QPolygo
 
   int pointIncrement = distance > 0 ? 1 : -1;
   QPointF previousPoint = points[vertex];
-  int startPoint = distance > 0 ? std::min( vertex + 1, points.count() - 1 ) : std::max( vertex - 1, 0 );
+  int startPoint = distance > 0 ? std::min( vertex + 1, static_cast<int>( points.count() ) - 1 ) : std::max( vertex - 1, 0 );
   int endPoint = distance > 0 ? points.count() - 1 : 0;
   double distanceLeft = std::fabs( distance );
 

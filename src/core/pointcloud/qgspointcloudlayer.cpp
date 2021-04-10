@@ -32,19 +32,19 @@
 #include "qgsmaplayerlegend.h"
 #include "qgsmaplayerfactory.h"
 #include <QUrl>
+#include "qgseptprovider.h"
 
-QgsPointCloudLayer::QgsPointCloudLayer( const QString &path,
+QgsPointCloudLayer::QgsPointCloudLayer( const QString &uri,
                                         const QString &baseName,
                                         const QString &providerLib,
                                         const QgsPointCloudLayer::LayerOptions &options )
-  : QgsMapLayer( QgsMapLayerType::PointCloudLayer, baseName, path )
+  : QgsMapLayer( QgsMapLayerType::PointCloudLayer, baseName, uri )
   , mElevationProperties( new QgsPointCloudLayerElevationProperties( this ) )
 {
-
-  if ( !path.isEmpty() && !providerLib.isEmpty() )
+  if ( !uri.isEmpty() && !providerLib.isEmpty() )
   {
     QgsDataProvider::ProviderOptions providerOptions { options.transformContext };
-    setDataSource( path, baseName, providerLib, providerOptions, options.loadDefaultStyle );
+    setDataSource( uri, baseName, providerLib, providerOptions, options.loadDefaultStyle );
 
     if ( !options.skipIndexGeneration && mDataProvider && mDataProvider->isValid() )
       mDataProvider.get()->generateIndex();
@@ -473,7 +473,7 @@ QString QgsPointCloudLayer::htmlMetadata() const
   // feature count
   QLocale locale = QLocale();
   locale.setNumberOptions( locale.numberOptions() &= ~QLocale::NumberOption::OmitGroupSeparator );
-  const int pointCount = mDataProvider ? mDataProvider->pointCount() : -1;
+  const qint64 pointCount = mDataProvider ? mDataProvider->pointCount() : -1;
   myMetadata += QStringLiteral( "<tr><td class=\"highlight\">" )
                 + tr( "Point count" ) + QStringLiteral( "</td><td>" )
                 + ( pointCount < 0 ? tr( "unknown" ) : locale.toString( static_cast<qlonglong>( pointCount ) ) )
@@ -630,7 +630,7 @@ QgsPointCloudAttributeCollection QgsPointCloudLayer::attributes() const
   return mDataProvider ? mDataProvider->attributes() : QgsPointCloudAttributeCollection();
 }
 
-int QgsPointCloudLayer::pointCount() const
+qint64 QgsPointCloudLayer::pointCount() const
 {
   return mDataProvider ? mDataProvider->pointCount() : 0;
 }

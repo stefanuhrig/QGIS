@@ -290,7 +290,7 @@ void QgsMapCanvas::setMagnificationFactor( double factor, const QgsPointXY *cent
   // do not go higher or lower than min max magnification ratio
   double magnifierMin = QgsGuiUtils::CANVAS_MAGNIFICATION_MIN;
   double magnifierMax = QgsGuiUtils::CANVAS_MAGNIFICATION_MAX;
-  factor = qBound( magnifierMin, factor, magnifierMax );
+  factor = std::clamp( factor, magnifierMin, magnifierMax );
 
   // the magnifier widget is in integer percent
   if ( !qgsDoubleNear( factor, mSettings.magnificationFactor(), 0.01 ) )
@@ -1151,7 +1151,7 @@ void QgsMapCanvas::setExtent( const QgsRectangle &r, bool magnified )
       ScaleRestorer restorer( this );
       const double ratio { extent().width() / extent().height() };
       const double factor { r.width() / r.height() > ratio ? extent().width() / r.width() :  extent().height() / r.height() };
-      const double scaleFactor { qBound( QgsGuiUtils::CANVAS_MAGNIFICATION_MIN,  mSettings.magnificationFactor() * factor, QgsGuiUtils::CANVAS_MAGNIFICATION_MAX ) };
+      const double scaleFactor { std::clamp( mSettings.magnificationFactor() * factor, QgsGuiUtils::CANVAS_MAGNIFICATION_MIN, QgsGuiUtils::CANVAS_MAGNIFICATION_MAX ) };
       const QgsPointXY newCenter { r.center() };
       mSettings.setMagnificationFactor( scaleFactor, &newCenter );
       emit magnificationChanged( scaleFactor );
@@ -1885,8 +1885,15 @@ void QgsMapCanvas::endZoomRect( QPoint pos )
 
 void QgsMapCanvas::mousePressEvent( QMouseEvent *e )
 {
+  // use shift+middle mouse button for zooming, map tools won't receive any events in that case
+  if ( e->button() == Qt::MiddleButton &&
+       e->modifiers() & Qt::ShiftModifier )
+  {
+    beginZoomRect( e->pos() );
+    return;
+  }
   //use middle mouse button for panning, map tools won't receive any events in that case
-  if ( e->button() == Qt::MiddleButton )
+  else if ( e->button() == Qt::MiddleButton )
   {
     mCanvasProperties->panSelectorDown = true;
     panActionStart( mCanvasProperties->mouseLastXY );
@@ -1927,8 +1934,15 @@ void QgsMapCanvas::mousePressEvent( QMouseEvent *e )
 
 void QgsMapCanvas::mouseReleaseEvent( QMouseEvent *e )
 {
+  // if using shift+middle mouse button for zooming, end zooming and return
+  if ( mZoomDragging &&
+       e->button() == Qt::MiddleButton )
+  {
+    endZoomRect( e->pos() );
+    return;
+  }
   //use middle mouse button for panning, map tools won't receive any events in that case
-  if ( e->button() == Qt::MiddleButton )
+  else if ( e->button() == Qt::MiddleButton )
   {
     mCanvasProperties->panSelectorDown = false;
     panActionEnd( mCanvasProperties->mouseLastXY );

@@ -24,6 +24,8 @@
 #include "qgsgdalutils.h"
 #include "qgsstringutils.h"
 
+#include <QRegularExpression>
+
 const QString QgsPostgresRasterProvider::PG_RASTER_PROVIDER_KEY = QStringLiteral( "postgresraster" );
 const QString QgsPostgresRasterProvider::PG_RASTER_PROVIDER_DESCRIPTION =  QStringLiteral( "Postgres raster provider" );
 
@@ -1061,7 +1063,7 @@ bool QgsPostgresRasterProvider::init()
         for ( const QString &t : std::as_const( pxTypes ) )
         {
           Qgis::DataType type { pixelTypeFromString( t ) };
-          if ( t == Qgis::DataType::UnknownDataType )
+          if ( type == Qgis::DataType::UnknownDataType )
           {
             throw QgsPostgresRasterProviderException( tr( "Unsupported data type: '%1'" ).arg( t ) );
           }
@@ -1432,6 +1434,29 @@ bool QgsPostgresRasterProvider::initFieldsAndTemporal( )
                                          QStringLiteral( "PostGIS" ), Qgis::Warning );
             }
           }
+
+          // Set temporal ranges
+          QList< QgsDateTimeRange > allRanges;
+          const QString sql =  QStringLiteral( "SELECT DISTINCT %1::timestamp "
+                                               "FROM %2 %3 ORDER BY %1::timestamp" ).arg( quotedIdentifier( temporalFieldName ),
+                                                   mQuery,
+                                                   where );
+
+          QgsPostgresResult result( connectionRO()->PQexec( sql ) );
+          if ( PGRES_TUPLES_OK == result.PQresultStatus() && result.PQntuples() > 0 )
+          {
+            for ( qlonglong row = 0; row < result.PQntuples(); ++row )
+            {
+              const QDateTime date = QDateTime::fromString( result.PQgetvalue( row, 0 ), Qt::DateFormat::ISODate );
+              allRanges.push_back( QgsDateTimeRange( date, date ) );
+            }
+            temporalCapabilities()->setAllAvailableTemporalRanges( allRanges );
+          }
+          else
+          {
+            QgsMessageLog::logMessage( tr( "No temporal ranges detected in raster temporal capabilities for field %1: %2" ).arg( temporalFieldName, mUri.param( QStringLiteral( "temporalDefaultTime" ) ) ),
+                                       QStringLiteral( "PostGIS" ), Qgis::Info );
+          }
         }
         else
         {
@@ -1648,11 +1673,12 @@ bool QgsPostgresRasterProvider::loadFields()
         }
         else
         {
-          QRegExp re( "numeric\\((\\d+),(\\d+)\\)" );
-          if ( re.exactMatch( formattedFieldType ) )
+          QRegularExpression re( QRegularExpression::anchoredPattern( QStringLiteral( "numeric\\((\\d+),(\\d+)\\)" ) ) );
+          const QRegularExpressionMatch match = re.match( formattedFieldType );
+          if ( match.hasMatch() )
           {
-            fieldSize = re.cap( 1 ).toInt();
-            fieldPrec = re.cap( 2 ).toInt();
+            fieldSize = match.captured( 1 ).toInt();
+            fieldPrec = match.captured( 2 ).toInt();
           }
           else if ( formattedFieldType != QLatin1String( "numeric" ) )
           {
@@ -1669,10 +1695,11 @@ bool QgsPostgresRasterProvider::loadFields()
       {
         fieldType = QVariant::String;
 
-        QRegExp re( "character varying\\((\\d+)\\)" );
-        if ( re.exactMatch( formattedFieldType ) )
+        const QRegularExpression re( QRegularExpression::anchoredPattern( QStringLiteral( "character varying\\((\\d+)\\)" ) ) );
+        const QRegularExpressionMatch match = re.match( formattedFieldType );
+        if ( match.hasMatch() )
         {
-          fieldSize = re.cap( 1 ).toInt();
+          fieldSize = match.captured( 1 ).toInt();
         }
         else
         {
@@ -1720,10 +1747,11 @@ bool QgsPostgresRasterProvider::loadFields()
 
         fieldType = QVariant::String;
 
-        QRegExp re( "character\\((\\d+)\\)" );
-        if ( re.exactMatch( formattedFieldType ) )
+        const QRegularExpression re( QRegularExpression::anchoredPattern( QStringLiteral( "character\\((\\d+)\\)" ) ) );
+        const QRegularExpressionMatch match = re.match( formattedFieldType );
+        if ( match.hasMatch() )
         {
-          fieldSize = re.cap( 1 ).toInt();
+          fieldSize = match.captured( 1 ).toInt();
         }
         else
         {
@@ -1738,10 +1766,11 @@ bool QgsPostgresRasterProvider::loadFields()
       {
         fieldType = QVariant::String;
 
-        QRegExp re( "char\\((\\d+)\\)" );
-        if ( re.exactMatch( formattedFieldType ) )
+        const QRegularExpression re( QRegularExpression::anchoredPattern( QStringLiteral( "char\\((\\d+)\\)" ) ) );
+        const QRegularExpressionMatch match = re.match( formattedFieldType );
+        if ( match.hasMatch() )
         {
-          fieldSize = re.cap( 1 ).toInt();
+          fieldSize = match.captured( 1 ).toInt();
         }
         else
         {
@@ -1845,9 +1874,9 @@ bool QgsPostgresRasterProvider::loadFields()
     QgsField newField = QgsField( fieldName, fieldType, fieldTypeName, fieldSize, fieldPrec, fieldComment, fieldSubType );
 
     QgsFieldConstraints constraints;
-    if ( notNullMap[tableoid][attnum] || ( mPrimaryKeyAttrs.size() == 1 && mPrimaryKeyAttrs[0] == i ) || identityMap[tableoid][attnum] != ' ' )
+    if ( notNullMap[tableoid][attnum] || ( mPrimaryKeyAttrs.size() == 1 && mPrimaryKeyAttrs[0] == fieldName ) || identityMap[tableoid][attnum] != ' ' )
       constraints.setConstraint( QgsFieldConstraints::ConstraintNotNull, QgsFieldConstraints::ConstraintOriginProvider );
-    if ( uniqueMap[tableoid][attnum] || ( mPrimaryKeyAttrs.size() == 1 && mPrimaryKeyAttrs[0] == i ) || identityMap[tableoid][attnum] != ' ' )
+    if ( uniqueMap[tableoid][attnum] || ( mPrimaryKeyAttrs.size() == 1 && mPrimaryKeyAttrs[0] == fieldName ) || identityMap[tableoid][attnum] != ' ' )
       constraints.setConstraint( QgsFieldConstraints::ConstraintUnique, QgsFieldConstraints::ConstraintOriginProvider );
     newField.setConstraints( constraints );
 
@@ -2181,7 +2210,7 @@ QString QgsPostgresRasterProvider::pkSql()
   if ( mPrimaryKeyAttrs.count( ) > 1 )
   {
     QStringList pkeys;
-    for ( const auto &k : std::as_const( mPrimaryKeyAttrs ) )
+    for ( const QString &k : std::as_const( mPrimaryKeyAttrs ) )
     {
       pkeys.push_back( quotedIdentifier( k ) );
     }

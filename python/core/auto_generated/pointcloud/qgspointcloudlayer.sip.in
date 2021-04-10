@@ -14,7 +14,7 @@
 
 class QgsPointCloudLayer : QgsMapLayer
 {
-%Docstring
+%Docstring(signature="appended")
 
 Represents a map layer supporting display of point clouds
 
@@ -48,7 +48,7 @@ Constructor for LayerOptions with optional ``transformContext``.
     };
 
 
-    explicit QgsPointCloudLayer( const QString &path = QString(),
+    explicit QgsPointCloudLayer( const QString &uri = QString(),
                                  const QString &baseName = QString(),
                                  const QString &providerLib = QStringLiteral( "pointcloud" ),
                                  const QgsPointCloudLayer::LayerOptions &options = QgsPointCloudLayer::LayerOptions() );
@@ -114,7 +114,7 @@ QgsPointCloudLayer cannot be copied.
 Returns the attributes available from the layer.
 %End
 
-    int pointCount() const;
+    qint64 pointCount() const;
 %Docstring
 Returns the total number of points available in the layer.
 %End

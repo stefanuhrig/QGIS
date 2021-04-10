@@ -26,6 +26,7 @@
 QgsPointCloudAttributeByRampRenderer::QgsPointCloudAttributeByRampRenderer()
 {
   mColorRampShader.setSourceColorRamp( QgsStyle::defaultStyle()->colorRamp( QStringLiteral( "Viridis" ) ) );
+  mColorRampShader.classifyColorRamp( 5, -1, QgsRectangle(), nullptr );
 }
 
 QString QgsPointCloudAttributeByRampRenderer::type() const
@@ -181,7 +182,7 @@ QList<QgsLayerTreeModelLegendNode *> QgsPointCloudAttributeByRampRenderer::creat
     case QgsColorRampShader::Interpolated:
       // for interpolated shaders we use a ramp legend node unless the settings flag
       // to use the continuous legend is not set, in that case we fall through
-      if ( ! mColorRampShader.legendSettings() || mColorRampShader.legendSettings()->useContinuousLegend() )
+      if ( mColorRampShader.sourceColorRamp() && ( ! mColorRampShader.legendSettings() || mColorRampShader.legendSettings()->useContinuousLegend() ) )
       {
         res << new QgsColorRampLegendNode( nodeLayer, mColorRampShader.sourceColorRamp()->clone(),
                                            mColorRampShader.legendSettings() ? *mColorRampShader.legendSettings() : QgsColorRampLegendNodeSettings(),

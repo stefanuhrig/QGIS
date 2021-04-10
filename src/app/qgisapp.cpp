@@ -484,7 +484,7 @@ extern "C"
 #ifndef Q_OS_WIN
 #include <dlfcn.h>
 #else
-#include <windows.h>
+#include <shellapi.h>
 #include <dbghelp.h>
 #endif
 
@@ -10449,7 +10449,7 @@ void QgisApp::pasteFromClipboard( QgsMapLayer *destinationLayer )
   int nTotalFeatures = features.count();
   QgsExpressionContext context = pasteVectorLayer->createExpressionContext();
 
-  QgsFeatureList compatibleFeatures( QgsVectorLayerUtils::makeFeaturesCompatible( features, pasteVectorLayer ) );
+  QgsFeatureList compatibleFeatures( QgsVectorLayerUtils::makeFeaturesCompatible( features, pasteVectorLayer, QgsFeatureSink::RegeneratePrimaryKey ) );
   QgsVectorLayerUtils::QgsFeaturesDataList newFeaturesDataList;
   newFeaturesDataList.reserve( compatibleFeatures.size() );
 
@@ -16242,19 +16242,25 @@ void QgisApp::showLayerProperties( QgsMapLayer *mapLayer, const QString &page )
     return; //don't show properties of embedded layers
   }
 
+  // collect factories from registered data providers
+  QList<const QgsMapLayerConfigWidgetFactory *> providerFactories = QgsGui::providerGuiRegistry()->mapLayerConfigWidgetFactories( mapLayer );
+  providerFactories.append( mMapLayerPanelFactories );
+
   switch ( mapLayer->type() )
   {
     case QgsMapLayerType::RasterLayer:
     {
       QgsRasterLayerProperties *rasterLayerPropertiesDialog = new QgsRasterLayerProperties( mapLayer, mMapCanvas, this );
 
-      for ( QgsMapLayerConfigWidgetFactory *factory : std::as_const( mMapLayerPanelFactories ) )
+      for ( const QgsMapLayerConfigWidgetFactory *factory : std::as_const( providerFactories ) )
       {
         rasterLayerPropertiesDialog->addPropertiesPageFactory( factory );
       }
 
       if ( !page.isEmpty() )
         rasterLayerPropertiesDialog->setCurrentPage( page );
+      else
+        rasterLayerPropertiesDialog->restoreLastPage();
 
       // Cannot use exec here due to raster transparency map tool:
       // in order to pass focus to the canvas, the dialog needs to
@@ -16278,10 +16284,15 @@ void QgisApp::showLayerProperties( QgsMapLayer *mapLayer, const QString &page )
     {
       QgsMeshLayerProperties meshLayerPropertiesDialog( mapLayer, mMapCanvas, this );
 
-      for ( QgsMapLayerConfigWidgetFactory *factory : std::as_const( mMapLayerPanelFactories ) )
+      for ( const QgsMapLayerConfigWidgetFactory *factory : std::as_const( providerFactories ) )
       {
         meshLayerPropertiesDialog.addPropertiesPageFactory( factory );
       }
+
+      if ( !page.isEmpty() )
+        meshLayerPropertiesDialog.setCurrentPage( page );
+      else
+        meshLayerPropertiesDialog.restoreLastPage();
 
       mMapStyleWidget->blockUpdates( true );
       if ( meshLayerPropertiesDialog.exec() )
@@ -16312,7 +16323,7 @@ void QgisApp::showLayerProperties( QgsMapLayer *mapLayer, const QString &page )
           saveAsFile( clone.get() );
         }
       } );
-      for ( QgsMapLayerConfigWidgetFactory *factory : std::as_const( mMapLayerPanelFactories ) )
+      for ( const QgsMapLayerConfigWidgetFactory *factory : std::as_const( providerFactories ) )
       {
         vectorLayerPropertiesDialog->addPropertiesPageFactory( factory );
       }
@@ -16339,6 +16350,8 @@ void QgisApp::showLayerProperties( QgsMapLayer *mapLayer, const QString &page )
       QgsVectorTileLayerProperties vectorTileLayerPropertiesDialog( qobject_cast<QgsVectorTileLayer *>( mapLayer ), mMapCanvas, visibleMessageBar(), this );
       if ( !page.isEmpty() )
         vectorTileLayerPropertiesDialog.setCurrentPage( page );
+      else
+        vectorTileLayerPropertiesDialog.restoreLastPage();
 
       mMapStyleWidget->blockUpdates( true );
       if ( vectorTileLayerPropertiesDialog.exec() )
@@ -16359,7 +16372,7 @@ void QgisApp::showLayerProperties( QgsMapLayer *mapLayer, const QString &page )
       else
         pointCloudLayerPropertiesDialog.restoreLastPage();
 
-      for ( QgsMapLayerConfigWidgetFactory *factory : std::as_const( mMapLayerPanelFactories ) )
+      for ( const QgsMapLayerConfigWidgetFactory *factory : std::as_const( providerFactories ) )
       {
         pointCloudLayerPropertiesDialog.addPropertiesPageFactory( factory );
       }

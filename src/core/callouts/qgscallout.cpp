@@ -19,6 +19,7 @@
 #include "qgsrendercontext.h"
 #include "qgssymbol.h"
 #include "qgslinesymbollayer.h"
+#include "qgsfillsymbollayer.h"
 #include "qgssymbollayerutils.h"
 #include "qgsxmlutils.h"
 #include "qgslinestring.h"
@@ -26,6 +27,7 @@
 #include "qgsgeos.h"
 #include "qgsgeometryutils.h"
 #include "qgscircularstring.h"
+#include "qgsshapegenerator.h"
 #include <QPainter>
 #include <mutex>
 
@@ -57,6 +59,11 @@ void QgsCallout::initPropertyDefinitions()
     {
       QgsCallout::Orientation, QgsPropertyDefinition( "Orientation", QgsPropertyDefinition::DataTypeString, QObject::tr( "Callout curve orientation" ),  QObject::tr( "string " ) + "[<b>auto</b>|<b>clockwise</b>|<b>counterclockwise</b>]", origin )
     },
+    {
+      QgsCallout::Margins, QgsPropertyDefinition( "Margins", QgsPropertyDefinition::DataTypeString, QObject::tr( "Margins" ), QObject::tr( "string of four doubles '<b>top,right,bottom,left</b>' or array of doubles <b>[top, right, bottom, left]</b>" ) )
+    },
+    { QgsCallout::WedgeWidth, QgsPropertyDefinition( "WedgeWidth", QObject::tr( "Wedge width" ), QgsPropertyDefinition::DoublePositive, origin ) },
+    { QgsCallout::CornerRadius, QgsPropertyDefinition( "CornerRadius", QObject::tr( "Corner radius" ), QgsPropertyDefinition::DoublePositive, origin ) },
   };
 }
 
@@ -128,9 +135,6 @@ QgsCallout::DrawOrder QgsCallout::drawOrder() const
 
 void QgsCallout::render( QgsRenderContext &context, const QRectF &rect, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext )
 {
-  if ( !mEnabled )
-    return;
-
 #if 0 // for debugging
   QPainter *painter = context.painter();
   painter->save();
@@ -992,4 +996,285 @@ double QgsCurvedLineCallout::curvature() const
 void QgsCurvedLineCallout::setCurvature( double curvature )
 {
   mCurvature = curvature;
+}
+
+
+
+//
+// QgsBalloonCallout
+//
+
+QgsBalloonCallout::QgsBalloonCallout()
+{
+  mFillSymbol = std::make_unique< QgsFillSymbol >( QgsSymbolLayerList() << new QgsSimpleFillSymbolLayer( QColor( 255, 200, 60 ) ) );
+}
+
+QgsBalloonCallout::~QgsBalloonCallout() = default;
+
+QgsBalloonCallout::QgsBalloonCallout( const QgsBalloonCallout &other )
+  : QgsCallout( other )
+  , mFillSymbol( other.mFillSymbol ? other.mFillSymbol->clone() : nullptr )
+  , mOffsetFromAnchorDistance( other.mOffsetFromAnchorDistance )
+  , mOffsetFromAnchorUnit( other.mOffsetFromAnchorUnit )
+  , mOffsetFromAnchorScale( other.mOffsetFromAnchorScale )
+  , mMargins( other.mMargins )
+  , mMarginUnit( other.mMarginUnit )
+  , mWedgeWidth( other.mWedgeWidth )
+  , mWedgeWidthUnit( other.mWedgeWidthUnit )
+  , mWedgeWidthScale( other.mWedgeWidthScale )
+  , mCornerRadius( other.mCornerRadius )
+  , mCornerRadiusUnit( other.mCornerRadiusUnit )
+  , mCornerRadiusScale( other.mCornerRadiusScale )
+{
+
+}
+
+QgsCallout *QgsBalloonCallout::create( const QVariantMap &properties, const QgsReadWriteContext &context )
+{
+  std::unique_ptr< QgsBalloonCallout > callout = std::make_unique< QgsBalloonCallout >();
+  callout->readProperties( properties, context );
+  return callout.release();
+}
+
+QString QgsBalloonCallout::type() const
+{
+  return QStringLiteral( "balloon" );
+}
+
+QgsBalloonCallout *QgsBalloonCallout::clone() const
+{
+  return new QgsBalloonCallout( *this );
+}
+
+QVariantMap QgsBalloonCallout::properties( const QgsReadWriteContext &context ) const
+{
+  QVariantMap props = QgsCallout::properties( context );
+
+  if ( mFillSymbol )
+  {
+    props[ QStringLiteral( "fillSymbol" ) ] = QgsSymbolLayerUtils::symbolProperties( mFillSymbol.get() );
+  }
+
+  props[ QStringLiteral( "offsetFromAnchor" ) ] = mOffsetFromAnchorDistance;
+  props[ QStringLiteral( "offsetFromAnchorUnit" ) ] = QgsUnitTypes::encodeUnit( mOffsetFromAnchorUnit );
+  props[ QStringLiteral( "offsetFromAnchorMapUnitScale" ) ] = QgsSymbolLayerUtils::encodeMapUnitScale( mOffsetFromAnchorScale );
+
+  props[ QStringLiteral( "margins" ) ] = mMargins.toString();
+  props[ QStringLiteral( "marginsUnit" ) ] = QgsUnitTypes::encodeUnit( mMarginUnit );
+
+  props[ QStringLiteral( "wedgeWidth" ) ] = mWedgeWidth;
+  props[ QStringLiteral( "wedgeWidthUnit" ) ] = QgsUnitTypes::encodeUnit( mWedgeWidthUnit );
+  props[ QStringLiteral( "wedgeWidthMapUnitScale" ) ] = QgsSymbolLayerUtils::encodeMapUnitScale( mWedgeWidthScale );
+
+  props[ QStringLiteral( "cornerRadius" ) ] = mCornerRadius;
+  props[ QStringLiteral( "cornerRadiusUnit" ) ] = QgsUnitTypes::encodeUnit( mCornerRadiusUnit );
+  props[ QStringLiteral( "cornerRadiusMapUnitScale" ) ] = QgsSymbolLayerUtils::encodeMapUnitScale( mCornerRadiusScale );
+
+  return props;
+}
+
+void QgsBalloonCallout::readProperties( const QVariantMap &props, const QgsReadWriteContext &context )
+{
+  QgsCallout::readProperties( props, context );
+
+  const QString fillSymbolDef = props.value( QStringLiteral( "fillSymbol" ) ).toString();
+  QDomDocument doc( QStringLiteral( "symbol" ) );
+  doc.setContent( fillSymbolDef );
+  QDomElement symbolElem = doc.firstChildElement( QStringLiteral( "symbol" ) );
+  std::unique_ptr< QgsFillSymbol > fillSymbol( QgsSymbolLayerUtils::loadSymbol< QgsFillSymbol >( symbolElem, context ) );
+  if ( fillSymbol )
+    mFillSymbol = std::move( fillSymbol );
+
+  mOffsetFromAnchorDistance = props.value( QStringLiteral( "offsetFromAnchor" ), 0 ).toDouble();
+  mOffsetFromAnchorUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "offsetFromAnchorUnit" ) ).toString() );
+  mOffsetFromAnchorScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "offsetFromAnchorMapUnitScale" ) ).toString() );
+
+  mMargins = QgsMargins::fromString( props.value( QStringLiteral( "margins" ) ).toString() );
+  mMarginUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "marginsUnit" ) ).toString() );
+
+  mWedgeWidth = props.value( QStringLiteral( "wedgeWidth" ), 2.64 ).toDouble();
+  mWedgeWidthUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "wedgeWidthUnit" ) ).toString() );
+  mWedgeWidthScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "wedgeWidthMapUnitScale" ) ).toString() );
+
+  mCornerRadius = props.value( QStringLiteral( "cornerRadius" ), 0 ).toDouble();
+  mCornerRadiusUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "cornerRadiusUnit" ) ).toString() );
+  mCornerRadiusScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "cornerRadiusMapUnitScale" ) ).toString() );
+}
+
+void QgsBalloonCallout::startRender( QgsRenderContext &context )
+{
+  QgsCallout::startRender( context );
+  if ( mFillSymbol )
+    mFillSymbol->startRender( context );
+}
+
+void QgsBalloonCallout::stopRender( QgsRenderContext &context )
+{
+  QgsCallout::stopRender( context );
+  if ( mFillSymbol )
+    mFillSymbol->stopRender( context );
+}
+
+QSet<QString> QgsBalloonCallout::referencedFields( const QgsRenderContext &context ) const
+{
+  QSet<QString> fields = QgsCallout::referencedFields( context );
+  if ( mFillSymbol )
+    fields.unite( mFillSymbol->usedAttributes( context ) );
+  return fields;
+}
+
+QgsFillSymbol *QgsBalloonCallout::fillSymbol()
+{
+  return mFillSymbol.get();
+}
+
+void QgsBalloonCallout::setFillSymbol( QgsFillSymbol *symbol )
+{
+  mFillSymbol.reset( symbol );
+}
+
+void QgsBalloonCallout::draw( QgsRenderContext &context, const QRectF &rect, const double, const QgsGeometry &anchor, QgsCalloutContext &calloutContext )
+{
+  bool destinationIsPinned = false;
+  QgsGeometry line = calloutLineToPart( QgsGeometry::fromRect( rect ), anchor.constGet(), context, calloutContext, destinationIsPinned );
+
+  double offsetFromAnchor = mOffsetFromAnchorDistance;
+  if ( dataDefinedProperties().isActive( QgsCallout::OffsetFromAnchor ) )
+  {
+    context.expressionContext().setOriginalValueVariable( offsetFromAnchor );
+    offsetFromAnchor = dataDefinedProperties().valueAsDouble( QgsCallout::OffsetFromAnchor, context.expressionContext(), offsetFromAnchor );
+  }
+  const double offsetFromAnchorPixels = context.convertToPainterUnits( offsetFromAnchor, mOffsetFromAnchorUnit, mOffsetFromAnchorScale );
+
+  if ( offsetFromAnchorPixels > 0 )
+  {
+    if ( const QgsLineString *ls = qgsgeometry_cast< const QgsLineString * >( line.constGet() ) )
+    {
+      line = QgsGeometry( ls->curveSubstring( 0, ls->length() - offsetFromAnchorPixels ) );
+    }
+  }
+
+  QgsPointXY destination;
+  QgsPointXY origin;
+  if ( const QgsLineString *ls = qgsgeometry_cast< const QgsLineString * >( line.constGet() ) )
+  {
+    origin = ls->startPoint();
+    destination = ls->endPoint();
+  }
+  else
+  {
+    destination = QgsPointXY( rect.center() );
+  }
+
+  const QPolygonF points = getPoints( context, destination, rect );
+  if ( points.empty() )
+    return;
+
+  if ( !origin.isEmpty() )
+  {
+    QgsCalloutPosition position;
+    position.setOrigin( context.mapToPixel().toMapCoordinates( origin.x(), origin.y() ).toQPointF() );
+    position.setOriginIsPinned( false );
+    position.setDestination( context.mapToPixel().toMapCoordinates( destination.x(), destination.y() ).toQPointF() );
+    position.setDestinationIsPinned( destinationIsPinned );
+    calloutContext.addCalloutPosition( position );
+  }
+
+  mFillSymbol->renderPolygon( points, nullptr, nullptr, context );
+}
+
+QPolygonF QgsBalloonCallout::getPoints( QgsRenderContext &context, QgsPointXY origin, QRectF rect ) const
+{
+  double segmentPointWidth = mWedgeWidth;
+  if ( dataDefinedProperties().isActive( QgsCallout::WedgeWidth ) )
+  {
+    context.expressionContext().setOriginalValueVariable( segmentPointWidth );
+    segmentPointWidth = dataDefinedProperties().valueAsDouble( QgsCallout::WedgeWidth, context.expressionContext(), segmentPointWidth );
+  }
+  segmentPointWidth = context.convertToPainterUnits( segmentPointWidth, mWedgeWidthUnit, mWedgeWidthScale );
+
+  double cornerRadius = mCornerRadius;
+  if ( dataDefinedProperties().isActive( QgsCallout::CornerRadius ) )
+  {
+    context.expressionContext().setOriginalValueVariable( cornerRadius );
+    cornerRadius = dataDefinedProperties().valueAsDouble( QgsCallout::CornerRadius, context.expressionContext(), cornerRadius );
+  }
+  cornerRadius = context.convertToPainterUnits( cornerRadius, mCornerRadiusUnit, mCornerRadiusScale );
+
+  double left = mMargins.left();
+  double right = mMargins.right();
+  double top = mMargins.top();
+  double bottom = mMargins.bottom();
+
+  if ( dataDefinedProperties().isActive( QgsCallout::Margins ) )
+  {
+    const QVariant value = dataDefinedProperties().value( QgsCallout::Margins, context.expressionContext() );
+    if ( !value.isNull() )
+    {
+      if ( value.type() == QVariant::List )
+      {
+        const QVariantList list = value.toList();
+        if ( list.size() == 4 )
+        {
+          bool topOk = false;
+          bool rightOk = false;
+          bool bottomOk = false;
+          bool leftOk = false;
+          double evaluatedTop = list.at( 0 ).toDouble( &topOk );
+          double evaluatedRight = list.at( 1 ).toDouble( &rightOk );
+          double evaluatedBottom = list.at( 2 ).toDouble( &bottomOk );
+          double evaluatedLeft = list.at( 3 ).toDouble( &leftOk );
+          if ( topOk && rightOk && bottomOk && leftOk )
+          {
+            left = evaluatedLeft;
+            top = evaluatedTop;
+            right = evaluatedRight;
+            bottom = evaluatedBottom;
+          }
+        }
+      }
+      else
+      {
+        const QStringList list = value.toString().trimmed().split( ',' );
+        if ( list.count() == 4 )
+        {
+          bool topOk = false;
+          bool rightOk = false;
+          bool bottomOk = false;
+          bool leftOk = false;
+          double evaluatedTop = list.at( 0 ).toDouble( &topOk );
+          double evaluatedRight = list.at( 1 ).toDouble( &rightOk );
+          double evaluatedBottom = list.at( 2 ).toDouble( &bottomOk );
+          double evaluatedLeft = list.at( 3 ).toDouble( &leftOk );
+          if ( topOk && rightOk && bottomOk && leftOk )
+          {
+            left = evaluatedLeft;
+            top = evaluatedTop;
+            right = evaluatedRight;
+            bottom = evaluatedBottom;
+          }
+        }
+      }
+    }
+  }
+
+  const double marginLeft = context.convertToPainterUnits( left, mMarginUnit );
+  const double marginRight = context.convertToPainterUnits( right, mMarginUnit );
+  const double marginTop = context.convertToPainterUnits( top, mMarginUnit );
+  const double marginBottom = context.convertToPainterUnits( bottom, mMarginUnit );
+
+  const QRectF expandedRect( rect.left() - marginLeft, rect.top() + marginBottom,
+                             rect.width() + marginLeft + marginRight,
+                             rect.height() - marginTop - marginBottom );
+
+  // IMPORTANT -- check for degenerate height is sometimes >=0, because QRectF are not normalized and we are using painter
+  // coordinates with descending vertical axis!
+  if ( expandedRect.width() <= 0 || ( rect.height() < 0 && expandedRect.height() >= 0 ) || ( rect.height() > 0 && expandedRect.height() <= 0 ) )
+    return QPolygonF();
+
+  const QPainterPath path = QgsShapeGenerator::createBalloon( origin, expandedRect, segmentPointWidth, cornerRadius );
+  QTransform t = QTransform::fromScale( 100, 100 );
+  QTransform ti = t.inverted();
+  QPolygonF poly = path.toFillPolygon( t );
+  return ti.map( poly );
 }
